@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lion X — AI Tools</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold: #f5a623;
+      --gold-dim: rgba(245,166,35,0.12);
+      --teal: #14b8a6;
+      --teal-bright: #2dd4bf;
+      --teal-dim: rgba(20,184,166,0.1);
+      --teal-glow: rgba(20,184,166,0.35);
+      --bg: #050508;
+      --bg2: #08080f;
+      --bg3: #0c0c18;
+      --card: #0a0a16;
+      --card2: #0e0e22;
+      --border-t: rgba(20,184,166,0.16);
+      --border-g: rgba(245,166,35,0.16);
+      --text: #dde8f0;
+      --muted: #4a5a6a;
+      --muted2: #7a8a9a;
+      --mono: 'Space Mono', monospace;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* PARTICLE BG */
+    #canvas {
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none; opacity: 0.3;
+    }
+
+    /* ── TOP NAV ── */
+    .topbar {
+      position: relative; z-index: 100;
+      height: 60px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(5,5,8,0.95);
+      border-bottom: 1px solid var(--border-t);
+      flex-shrink: 0;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 800; font-size: 16px;
+      color: var(--gold);
+      text-decoration: none;
+    }
+    .logo span { color: white; }
+    .logo .lion { filter: drop-shadow(0 0 8px var(--gold)); }
+
+    .nav-center {
+      display: flex; gap: 4px;
+    }
+    .nav-tab {
+      padding: 6px 16px; border-radius: 6px;
+      font-size: 13px; font-weight: 600;
+      color: var(--muted2); cursor: pointer;
+      border: none; background: transparent;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .nav-tab:hover { color: var(--teal); background: var(--teal-dim); }
+    .nav-tab.active { color: var(--teal); background: var(--teal-dim); }
+
+    .wallet-pill {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card2);
+      border: 1px solid var(--border-t);
+      padding: 7px 14px; border-radius: 8px;
+    }
+    .wallet-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100%{opacity:1;} 50%{opacity:0.4;}
+    }
+    .wallet-addr { font-size: 12px; font-family: var(--mono); color: var(--muted2); }
+    .balance-tag {
+      background: var(--gold-dim);
+      border: 1px solid rgba(245,166,35,0.25);
+      padding: 4px 10px; border-radius: 5px;
+      font-size: 12px; font-weight: 700; color: var(--gold);
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .app-body {
+      position: relative; z-index: 10;
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border-t);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar-section {
+      padding: 16px 12px 8px;
+    }
+    .sidebar-label {
+      font-size: 10px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1.5px; padding: 0 8px;
+      margin-bottom: 8px;
+    }
+    .tool-btn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; width: 100%;
+      border: none; background: transparent;
+      font-family: inherit;
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
+    .tool-btn:hover { background: var(--teal-dim); }
+    .tool-btn.active {
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+    }
+    .tool-btn-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+      background: var(--bg3);
+    }
+    .tool-btn.active .tool-btn-icon {
+      background: rgba(20,184,166,0.15);
+    }
+    .tool-btn-info { text-align: left; }
+    .tool-btn-name {
+      font-size: 13px; font-weight: 600;
+      color: var(--text);
+    }
+    .tool-btn.active .tool-btn-name { color: var(--teal); }
+    .tool-btn-cost {
+      font-size: 11px; color: var(--muted2);
+    }
+
+    .sidebar-divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      margin: 8px 12px;
+    }
+
+    .sidebar-stat {
+      padding: 10px 20px;
+    }
+    .ss-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .ss-val { font-size: 18px; font-weight: 800; }
+    .ss-val.teal { color: var(--teal); }
+    .ss-val.gold { color: var(--gold); }
+
+    /* ── MAIN PANEL ── */
+    .main-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Tool Header */
+    .tool-header {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+    .tool-header-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+    }
+    .tool-title-wrap { display: flex; align-items: center; gap: 12px; }
+    .tool-header-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .tool-header-name { font-size: 18px; font-weight: 800; }
+    .tool-header-desc { font-size: 13px; color: var(--muted2); margin-top: 2px; }
+    .burn-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--gold-dim);
+      border: 1px solid rgba(245,166,35,0.2);
+      padding: 7px 14px; border-radius: 8px;
+      font-size: 13px; font-weight: 700; color: var(--gold);
+    }
+
+    /* Tool Content Area */
+    .tool-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      gap: 0;
+    }
+
+    /* Input Panel */
+    .input-panel {
+      width: 340px;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(255,255,255,0.04);
+      display: flex; flex-direction: column;
+      padding: 20px;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .input-label {
+      font-size: 11px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 6px;
+    }
+    .input-field {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px; font-family: var(--mono);
+      color: var(--text);
+      resize: none;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .input-field:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(20,184,166,0.08); }
+    .input-field::placeholder { color: var(--muted); }
+
+    .option-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .option-chip {
+      padding: 6px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: var(--bg3);
+      color: var(--muted2); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .option-chip:hover { border-color: var(--teal); color: var(--teal); }
+    .option-chip.selected {
+      background: var(--teal-dim);
+      border-color: var(--border-t);
+      color: var(--teal);
+    }
+
+    .confirm-burn {
+      background: var(--card2);
+      border: 1px solid var(--border-t);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .burn-row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; padding: 5px 0;
+      color: var(--muted2);
+    }
+    .burn-row span:last-child { color: var(--text); font-weight: 700; }
+    .burn-total {
+      display: flex; justify-content: space-between;
+      font-size: 14px; font-weight: 800;
+      padding: 10px 0 4px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 5px;
+      color: var(--gold);
+    }
+
+    .run-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--teal), #0d9488);
+      color: #000; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(20,184,166,0.2);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .run-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(20,184,166,0.4);
+    }
+    .run-btn:disabled {
+      background: var(--muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Output Panel */
+    .output-panel {
+      flex: 1;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .output-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .output-title {
+      font-size: 13px; font-weight: 700; color: var(--muted2);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .output-status {
+      font-size: 11px; padding: 3px 10px; border-radius: 4px;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-ready { background: var(--teal-dim); color: var(--teal); border: 1px solid var(--border-t); }
+    .status-running { background: rgba(245,166,35,0.1); color: var(--gold); border: 1px solid var(--border-g); animation: blink 1s infinite; }
+    .status-done { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+    .output-body {
+      flex: 1; overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 14px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 48px; opacity: 0.3; }
+    .empty-text { font-size: 14px; }
+
+    /* Results */
+    .result-block { display: none; }
+    .result-block.show { display: block; }
+
+    /* Score card */
+    .score-card {
+      background: var(--card2);
+      border: 1px solid var(--border-t);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      position: relative; overflow: hidden;
+    }
+    .score-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--teal), var(--gold));
+    }
+    .score-top {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .score-label { font-size: 12px; color: var(--muted2); font-weight: 600; }
+    .score-val {
+      font-size: 48px; font-weight: 900;
+      font-family: var(--mono);
+      line-height: 1;
+    }
+    .score-val.high { color: #22c55e; }
+    .score-val.med { color: var(--gold); }
+    .score-val.low { color: #ef4444; }
+    .score-bar-track {
+      height: 6px; background: var(--bg3);
+      border-radius: 100px; overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: 100px;
+      transition: width 1.5s ease;
+    }
+
+    /* Metric grid */
+    .metric-grid {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 10px; margin-bottom: 16px;
+    }
+    .metric-card {
+      background: var(--card2);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .metric-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-val { font-size: 17px; font-weight: 800; }
+    .metric-val.teal { color: var(--teal); }
+    .metric-val.gold { color: var(--gold); }
+    .metric-val.green { color: #22c55e; }
+    .metric-val.red { color: #ef4444; }
+
+    /* AI Analysis block */
+    .ai-block {
+      background: var(--card);
+      border: 1px solid var(--border-t);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .ai-block-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .ai-text {
+      font-size: 14px; color: var(--muted2);
+      line-height: 1.75;
+    }
+    .ai-text span { color: var(--text); font-weight: 600; }
+
+    /* Flag list */
+    .flag-list { list-style: none; margin-top: 10px; }
+    .flag-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 13px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .flag-item:last-child { border: none; }
+    .flag-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      margin-top: 4px; flex-shrink: 0;
+    }
+    .flag-dot.green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .flag-dot.yellow { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+    .flag-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+    /* Typing animation */
+    .typing-line {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--teal);
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .typing-line.show { opacity: 1; transform: translateY(0); }
+
+    /* Terminal block */
+    .terminal {
+      background: #020208;
+      border: 1px solid rgba(20,184,166,0.15);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      margin-bottom: 14px;
+    }
+    .term-line { padding: 2px 0; }
+    .term-prompt { color: var(--teal); }
+    .term-out { color: var(--muted2); }
+    .term-val { color: white; }
+    .term-ok { color: #22c55e; }
+    .term-warn { color: var(--gold); }
+    .term-err { color: #ef4444; }
+
+    /* History panel */
+    .history-bar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-left: 1px solid rgba(255,255,255,0.04);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .history-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 1px;
+    }
+    .history-list { overflow-y: auto; flex: 1; }
+    .history-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .history-item:hover { background: var(--teal-dim); }
+    .hi-top { display: flex; justify-content: space-between; align-items: center; }
+    .hi-tool { font-size: 12px; font-weight: 700; color: var(--teal); }
+    .hi-cost { font-size: 11px; color: var(--gold); font-weight: 600; }
+    .hi-addr { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 3px; }
+    .hi-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(20,184,166,0.3);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-t); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- TOP NAV -->
+<div class="topbar">
+  <a href="index.html" class="logo">
+    <span class="lion">🦁</span>
+    <span>LION</span><span style="color:var(--teal)">X</span>
+  </a>
+  <div class="nav-center">
+    <button class="nav-tab" onclick="location.href='index.html'">Home</button>
+    <button class="nav-tab active">AI Tools</button>
+    <button class="nav-tab">Marketplace</button>
+    <button class="nav-tab">Portfolio</button>
+  </div>
+  <div class="wallet-pill">
+    <span class="wallet-dot"></span>
+    <span class="wallet-addr">TXk9...a4F2</span>
+    <span class="balance-tag" id="bal-tag">12,450 LDA v2</span>
+  </div>
+</div>
+
+<!-- APP BODY -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">AI Tools</div>
+
+      <button class="tool-btn active" onclick="selectTool(0,this)">
+        <div class="tool-btn-icon">🔍</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">Wallet Analyzer</div>
+          <div class="tool-btn-cost">50 LDA v2</div>
+        </div>
+      </button>
+
+      <button class="tool-btn" onclick="selectTool(1,this)">
+        <div class="tool-btn-icon">🛡️</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">Contract Auditor</div>
+          <div class="tool-btn-cost">100 LDA v2</div>
+        </div>
+      </button>
+
+      <button class="tool-btn" onclick="selectTool(2,this)">
+        <div class="tool-btn-icon">📊</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">Market Intel</div>
+          <div class="tool-btn-cost">25 LDA v2</div>
+        </div>
+      </button>
+    </div>
+
+    <hr class="sidebar-divider"/>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Coming Soon</div>
+
+      <button class="tool-btn" style="opacity:0.4;cursor:not-allowed">
+        <div class="tool-btn-icon">🤖</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">Trade Signals</div>
+          <div class="tool-btn-cost">75 LDA v2</div>
+        </div>
+      </button>
+
+      <button class="tool-btn" style="opacity:0.4;cursor:not-allowed">
+        <div class="tool-btn-icon">🐋</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">Whale Tracker</div>
+          <div class="tool-btn-cost">60 LDA v2</div>
+        </div>
+      </button>
+
+      <button class="tool-btn" style="opacity:0.4;cursor:not-allowed">
+        <div class="tool-btn-icon">💎</div>
+        <div class="tool-btn-info">
+          <div class="tool-btn-name">NFT Valuator</div>
+          <div class="tool-btn-cost">40 LDA v2</div>
+        </div>
+      </button>
+    </div>
+
+    <hr class="sidebar-divider"/>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Your Stats</div>
+      <div class="sidebar-stat">
+        <div class="ss-label">LDA v2 Balance</div>
+        <div class="ss-val teal" id="sidebar-bal">12,450</div>
+      </div>
+      <div class="sidebar-stat">
+        <div class="ss-label">Queries Run</div>
+        <div class="ss-val gold">3</div>
+      </div>
+      <div class="sidebar-stat">
+        <div class="ss-label">Total Burned</div>
+        <div class="ss-val" style="color:#ef4444;font-size:16px">🔥 175 LDA v2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel">
+
+    <!-- Tool Header -->
+    <div class="tool-header">
+      <div class="tool-header-row">
+        <div class="tool-title-wrap">
+          <div class="tool-header-icon" id="hdr-icon">🔍</div>
+          <div>
+            <div class="tool-header-name" id="hdr-name">Wallet Analyzer</div>
+            <div class="tool-header-desc" id="hdr-desc">Deep-dive any Tron wallet — portfolio, patterns, risk score</div>
+          </div>
+        </div>
+        <div class="burn-badge" id="hdr-cost">🔥 <span>50 LDA v2 per query</span></div>
+      </div>
+    </div>
+
+    <!-- Tool Content -->
+    <div class="tool-content">
+
+      <!-- Input Panel -->
+      <div class="input-panel">
+
+        <!-- WALLET ANALYZER INPUTS -->
+        <div id="inputs-0">
+          <div class="input-label">Wallet Address</div>
+          <input class="input-field" id="wallet-input" placeholder="TRX wallet address e.g. TXk9..."/>
+          <div style="margin-top:12px">
+            <div class="input-label">Analysis Depth</div>
+            <div class="option-row">
+              <div class="option-chip selected" onclick="selectChip(this,'depth')">Standard</div>
+              <div class="option-chip" onclick="selectChip(this,'depth')">Deep Scan</div>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <div class="input-label">Include</div>
+            <div class="option-row">
+              <div class="option-chip selected" onclick="toggleChip(this)">Portfolio</div>
+              <div class="option-chip selected" onclick="toggleChip(this)">Patterns</div>
+              <div class="option-chip selected" onclick="toggleChip(this)">Risk Score</div>
+              <div class="option-chip" onclick="toggleChip(this)">Tx History</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTRACT AUDITOR INPUTS -->
+        <div id="inputs-1" style="display:none">
+          <div class="input-label">Contract Address</div>
+          <input class="input-field" id="contract-input" placeholder="TRC-20 contract address..."/>
+          <div style="margin-top:12px">
+            <div class="input-label">Scan Type</div>
+            <div class="option-row">
+              <div class="option-chip selected" onclick="selectChip(this,'scan')">Full Audit</div>
+              <div class="option-chip" onclick="selectChip(this,'scan')">Quick Check</div>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <div class="input-label">Check For</div>
+            <div class="option-row">
+              <div class="option-chip selected" onclick="toggleChip(this)">Honeypot</div>
+              <div class="option-chip selected" onclick="toggleChip(this)">Rug Pull</div>
+              <div class="option-chip selected" onclick="toggleChip(this)">Mint Risk</div>
+              <div class="option-chip selected" onclick="toggleChip(this)">Ownership</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MARKET INTEL INPUTS -->
+        <div id="inputs-2" style="display:none">
+          <div class="input-label">Token Name or Address</div>
+          <input class="input-field" id="token-input" placeholder="e.g. MANES or contract address..."/>
+          <div style="margin-top:12px">
+            <div class="input-label">Analysis Type</div>
+            <div class="option-row">
+              <div class="option-chip selected" onclick="selectChip(this,'analysis')">Full Report</div>
+              <div class="option-chip" onclick="selectChip(this,'analysis')">Price Only</div>
+              <div class="option-chip" onclick="selectChip(this,'analysis')">Sentiment</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Burn Confirm -->
+        <div class="confirm-burn">
+          <div class="burn-row"><span>Tool Cost</span><span id="burn-cost">50 LDA v2</span></div>
+          <div class="burn-row"><span>Burn (70%)</span><span id="burn-amount" style="color:var(--teal)">35 LDA v2 🔥</span></div>
+          <div class="burn-row"><span>Treasury (30%)</span><span id="treasury-amount">15 LDA v2</span></div>
+          <div class="burn-total"><span>Your Balance After</span><span id="bal-after">12,400 LDA v2</span></div>
+        </div>
+
+        <button class="run-btn" id="run-btn" onclick="runQuery()">
+          ⚡ Run Analysis
+        </button>
+      </div>
+
+      <!-- Output Panel -->
+      <div class="output-panel">
+        <div class="output-header">
+          <div class="output-title">
+            <span>⚡</span> Analysis Output
+          </div>
+          <div class="output-status status-ready" id="out-status">Ready</div>
+        </div>
+        <div class="output-body" id="output-body">
+
+          <!-- Empty State -->
+          <div class="empty-state" id="empty-state">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">Enter a wallet address and run analysis</div>
+          </div>
+
+          <!-- Loading State -->
+          <div id="loading-state" style="display:none">
+            <div class="terminal">
+              <div class="term-line"><span class="term-prompt">▶ </span><span class="term-out">Connecting to Tron node...</span></div>
+              <div class="term-line typing-line" id="tl1"><span class="term-prompt">▶ </span><span class="term-out">Verifying LDA v2 burn... </span><span class="term-ok">confirmed</span></div>
+              <div class="term-line typing-line" id="tl2"><span class="term-prompt">▶ </span><span class="term-out">Fetching on-chain data from Tronscan API...</span></div>
+              <div class="term-line typing-line" id="tl3"><span class="term-prompt">▶ </span><span class="term-out">Running AI analysis model...</span></div>
+              <div class="term-line typing-line" id="tl4"><span class="term-prompt">▶ </span><span class="term-out">Generating report...</span></div>
+            </div>
+          </div>
+
+          <!-- WALLET RESULT -->
+          <div class="result-block" id="result-0">
+            <div class="score-card">
+              <div class="score-top">
+                <div>
+                  <div class="score-label">RISK SCORE</div>
+                  <div class="score-val med" id="risk-score">42</div>
+                  <div style="font-size:12px;color:var(--gold);margin-top:4px;font-weight:600">⚠ Moderate Risk</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="score-label">WALLET TYPE</div>
+                  <div style="font-size:18px;font-weight:800;color:var(--teal);margin-top:4px">Active Trader</div>
+                  <div style="font-size:12px;color:var(--muted2);margin-top:2px" id="analyzed-addr">TXk9...a4F2</div>
+                </div>
+              </div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" id="risk-bar" style="width:0%;background:linear-gradient(90deg,#22c55e,var(--gold))"></div>
+              </div>
+            </div>
+
+            <div class="metric-grid">
+              <div class="metric-card">
+                <div class="metric-label">TRX Balance</div>
+                <div class="metric-val teal">8,423</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Token Count</div>
+                <div class="metric-val gold">14 assets</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Txns</div>
+                <div class="metric-val teal">2,847</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Wallet Age</div>
+                <div class="metric-val green">3.2 years</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Tx Size</div>
+                <div class="metric-val gold">$124</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Rug Exposure</div>
+                <div class="metric-val red">2 tokens</div>
+              </div>
+            </div>
+
+            <div class="ai-block">
+              <div class="ai-block-header">⚡ AI Analysis</div>
+              <div class="ai-text">
+                This wallet exhibits <span>active trader behavior</span> with a <span>3.2 year history</span> on Tron. Portfolio is diversified across 14 assets, primarily in TRX, USDT, and mid-cap DeFi tokens. <span>Two historical rug exposures detected</span> (small amounts, likely early degens). No honeypot interactions in last 90 days. Trading patterns suggest a <span>swing trader</span> with 3–14 day hold windows. No bot-like behavior detected. Overall <span>moderate risk</span> profile — active but not reckless.
+              </div>
+            </div>
+
+            <div class="ai-block">
+              <div class="ai-block-header">🚩 Flags & Signals</div>
+              <ul class="flag-list">
+                <li class="flag-item"><span class="flag-dot green"></span>Long-standing wallet — 3.2 years active, no sudden activity spikes</li>
+                <li class="flag-item"><span class="flag-dot green"></span>No interaction with known scam contracts in last 180 days</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>2 rug pull tokens held (low value, likely abandoned)</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>High USDT concentration (62%) — conservative positioning</li>
+                <li class="flag-item"><span class="flag-dot red"></span>Recent interaction with 1 unverified contract — proceed with caution</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- CONTRACT RESULT -->
+          <div class="result-block" id="result-1">
+            <div class="score-card">
+              <div class="score-top">
+                <div>
+                  <div class="score-label">SAFETY SCORE</div>
+                  <div class="score-val high">78</div>
+                  <div style="font-size:12px;color:#22c55e;margin-top:4px;font-weight:600">✓ Relatively Safe</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="score-label">CONTRACT TYPE</div>
+                  <div style="font-size:18px;font-weight:800;color:var(--teal);margin-top:4px">TRC-20 Token</div>
+                  <div style="font-size:12px;color:var(--muted2);margin-top:2px">Verified on Tronscan</div>
+                </div>
+              </div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" id="safe-bar" style="width:0%;background:linear-gradient(90deg,#22c55e,var(--teal))"></div>
+              </div>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-card"><div class="metric-label">Honeypot</div><div class="metric-val green">None</div></div>
+              <div class="metric-card"><div class="metric-label">Mint Function</div><div class="metric-val red">Present</div></div>
+              <div class="metric-card"><div class="metric-label">Ownership</div><div class="metric-val gold">Renounce Pending</div></div>
+              <div class="metric-card"><div class="metric-label">Verified</div><div class="metric-val green">Yes</div></div>
+              <div class="metric-card"><div class="metric-label">Buy Tax</div><div class="metric-val teal">0%</div></div>
+              <div class="metric-card"><div class="metric-label">Sell Tax</div><div class="metric-val teal">0%</div></div>
+            </div>
+            <div class="ai-block">
+              <div class="ai-block-header">⚡ AI Audit Summary</div>
+              <div class="ai-text">Contract is <span>verified on Tronscan</span> and passes basic safety checks. No honeypot mechanics detected — buys and sells are unrestricted. <span>Mint function is present</span> and should be monitored; owner retains ability to inflate supply. No hidden tax functions. Ownership has not yet been renounced — centralization risk remains. <span>Overall: investable with caution.</span> Watch for mint events and ownership renouncement as key trust signals.</div>
+            </div>
+            <div class="ai-block">
+              <div class="ai-block-header">🚩 Audit Flags</div>
+              <ul class="flag-list">
+                <li class="flag-item"><span class="flag-dot green"></span>No honeypot — buys and sells function normally</li>
+                <li class="flag-item"><span class="flag-dot green"></span>Contract verified and open source on Tronscan</li>
+                <li class="flag-item"><span class="flag-dot green"></span>No hidden buy/sell taxes detected</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>Mint function active — supply inflation possible</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>Owner wallet still controls contract</li>
+                <li class="flag-item"><span class="flag-dot red"></span>No audit report on file — unaudited smart contract</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- MARKET INTEL RESULT -->
+          <div class="result-block" id="result-2">
+            <div class="score-card">
+              <div class="score-top">
+                <div>
+                  <div class="score-label">SENTIMENT SCORE</div>
+                  <div class="score-val med">61</div>
+                  <div style="font-size:12px;color:var(--gold);margin-top:4px;font-weight:600">📈 Cautiously Bullish</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="score-label">TREND</div>
+                  <div style="font-size:18px;font-weight:800;color:#22c55e;margin-top:4px">Accumulation</div>
+                  <div style="font-size:12px;color:var(--muted2);margin-top:2px">Based on 7-day on-chain data</div>
+                </div>
+              </div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" id="sent-bar" style="width:0%;background:linear-gradient(90deg,var(--gold),#22c55e)"></div>
+              </div>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-card"><div class="metric-label">Holders</div><div class="metric-val teal">270</div></div>
+              <div class="metric-card"><div class="metric-label">Liquidity</div><div class="metric-val gold">$7,500</div></div>
+              <div class="metric-card"><div class="metric-label">24h Vol</div><div class="metric-val teal">$0</div></div>
+              <div class="metric-card"><div class="metric-label">Buy Pressure</div><div class="metric-val green">Moderate</div></div>
+              <div class="metric-card"><div class="metric-label">Holder Trend</div><div class="metric-val green">+2.3%</div></div>
+              <div class="metric-card"><div class="metric-label">Supply Float</div><div class="metric-val gold">34%</div></div>
+            </div>
+            <div class="ai-block">
+              <div class="ai-block-header">⚡ Market Intelligence</div>
+              <div class="ai-text">MANES is showing <span>early accumulation signals</span> — holder count has grown 2.3% this week with no significant sell pressure. Liquidity at <span>$7,500 on SunSwap</span> is thin but stable. The token has a <span>1 billion supply</span> with approximately 34% in active circulation. Community channels (Telegram, Twitter) show moderate engagement. <span>Upcoming platform utility announcement</span> could act as a catalyst. Positioning now ahead of utility launch appears favorable for risk-tolerant buyers.</div>
+            </div>
+            <div class="ai-block">
+              <div class="ai-block-header">📡 Signals</div>
+              <ul class="flag-list">
+                <li class="flag-item"><span class="flag-dot green"></span>Holder count trending upward — +2.3% weekly growth</li>
+                <li class="flag-item"><span class="flag-dot green"></span>No large whale dumps detected in last 14 days</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>Low 24h trading volume — thin liquidity, high slippage risk</li>
+                <li class="flag-item"><span class="flag-dot yellow"></span>No centralized exchange listing — limited price discovery</li>
+                <li class="flag-item"><span class="flag-dot red"></span>No major utility live yet — speculative at current stage</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- HISTORY PANEL -->
+      <div class="history-bar">
+        <div class="history-header">Query History</div>
+        <div class="history-list" id="history-list">
+          <div class="history-item">
+            <div class="hi-top">
+              <span class="hi-tool">Market Intel</span>
+              <span class="hi-cost">25 🔥</span>
+            </div>
+            <div class="hi-addr">MANES token</div>
+            <div class="hi-time">2 mins ago</div>
+          </div>
+          <div class="history-item">
+            <div class="hi-top">
+              <span class="hi-tool">Contract Audit</span>
+              <span class="hi-cost">100 🔥</span>
+            </div>
+            <div class="hi-addr">TXwX...z6d</div>
+            <div class="hi-time">14 mins ago</div>
+          </div>
+          <div class="history-item">
+            <div class="hi-top">
+              <span class="hi-tool">Wallet Analyzer</span>
+              <span class="hi-cost">50 🔥</span>
+            </div>
+            <div class="hi-addr">TXk9...a4F2</div>
+            <div class="hi-time">1 hour ago</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end tool-content -->
+  </div><!-- end main-panel -->
+</div><!-- end app-body -->
+
+<script>
+/* PARTICLES */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+const pts = Array.from({length: 80}, () => ({
+  x: Math.random()*canvas.width, y: Math.random()*canvas.height,
+  vx: (Math.random()-.5)*.3, vy: (Math.random()-.5)*.3,
+  r: Math.random()*1.2+.3,
+  c: Math.random()>.6?'#14b8a6':Math.random()>.5?'#f5a623':'#ffffff'
+}));
+function drawParticles() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  pts.forEach(p => {
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<0||p.x>canvas.width) p.vx*=-1;
+    if(p.y<0||p.y>canvas.height) p.vy*=-1;
+    ctx.globalAlpha=.35; ctx.fillStyle=p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+/* TOOL DATA */
+const tools = [
+  { icon:'🔍', name:'Wallet Analyzer', desc:'Deep-dive any Tron wallet — portfolio, patterns, risk score', cost:50 },
+  { icon:'🛡️', name:'Contract Auditor', desc:'Scan TRC-20 contracts for honeypots, rug indicators, hidden risks', cost:100 },
+  { icon:'📊', name:'Market Intelligence', desc:'AI-powered token sentiment, holder trends, and market signals', cost:25 }
+];
+
+let currentTool = 0;
+let balance = 12450;
+
+function selectTool(idx, el) {
+  currentTool = idx;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('[id^="inputs-"]').forEach(d => d.style.display='none');
+  document.getElementById('inputs-'+idx).style.display='block';
+  const t = tools[idx];
+  document.getElementById('hdr-icon').textContent = t.icon;
+  document.getElementById('hdr-name').textContent = t.name;
+  document.getElementById('hdr-desc').textContent = t.desc;
+  document.getElementById('hdr-cost').innerHTML = '🔥 <span>' + t.cost + ' LDA v2 per query</span>';
+  document.getElementById('burn-cost').textContent = t.cost + ' LDA v2';
+  document.getElementById('burn-amount').textContent = Math.floor(t.cost*.7) + ' LDA v2 🔥';
+  document.getElementById('treasury-amount').textContent = Math.ceil(t.cost*.3) + ' LDA v2';
+  document.getElementById('bal-after').textContent = (balance - t.cost).toLocaleString() + ' LDA v2';
+  // Reset output
+  document.getElementById('empty-state').style.display='flex';
+  document.getElementById('loading-state').style.display='none';
+  document.querySelectorAll('.result-block').forEach(r => r.classList.remove('show'));
+  document.getElementById('out-status').className='output-status status-ready';
+  document.getElementById('out-status').textContent='Ready';
+  document.getElementById('run-btn').disabled=false;
+  document.getElementById('run-btn').textContent='⚡ Run Analysis';
+}
+
+function selectChip(el, group) {
+  el.closest('.option-row').querySelectorAll('.option-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function toggleChip(el) { el.classList.toggle('selected'); }
+
+function runQuery() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing...';
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('loading-state').style.display = 'block';
+  document.getElementById('out-status').className = 'output-status status-running';
+  document.getElementById('out-status').textContent = 'Running...';
+  document.querySelectorAll('.result-block').forEach(r => r.classList.remove('show'));
+
+  // Show terminal lines one by one
+  const lines = ['tl1','tl2','tl3','tl4'];
+  lines.forEach((id, i) => {
+    setTimeout(() => document.getElementById(id).classList.add('show'), i * 600);
+  });
+
+  setTimeout(() => {
+    const cost = tools[currentTool].cost;
+    balance -= cost;
+    document.getElementById('bal-tag').textContent = balance.toLocaleString() + ' LDA v2';
+    document.getElementById('sidebar-bal').textContent = balance.toLocaleString();
+    document.getElementById('bal-after').textContent = (balance - cost).toLocaleString() + ' LDA v2';
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('result-'+currentTool).classList.add('show');
+    document.getElementById('out-status').className = 'output-status status-done';
+    document.getElementById('out-status').textContent = 'Complete';
+    btn.disabled = false;
+    btn.textContent = '⚡ Run Again';
+
+    // Animate bars
+    setTimeout(() => {
+      if (currentTool === 0) document.getElementById('risk-bar').style.width = '42%';
+      if (currentTool === 1) document.getElementById('safe-bar').style.width = '78%';
+      if (currentTool === 2) document.getElementById('sent-bar').style.width = '61%';
+    }, 200);
+
+    // Add to history
+    addHistory();
+    // Reset terminal lines for next time
+    lines.forEach(id => document.getElementById(id).classList.remove('show'));
+  }, 2800);
+}
+
+function addHistory() {
+  const t = tools[currentTool];
+  const div = document.createElement('div');
+  div.className = 'history-item';
+  div.innerHTML = `
+    <div class="hi-top">
+      <span class="hi-tool">${t.name.split(' ')[0]} ${t.name.split(' ')[1]||''}</span>
+      <span class="hi-cost">${t.cost} 🔥</span>
+    </div>
+    <div class="hi-addr">Just now</div>
+    <div class="hi-time">0 mins ago</div>
+  `;
+  const list = document.getElementById('history-list');
+  list.insertBefore(div, list.firstChild);
+}
+</script>
+
+</body>
+</html>
