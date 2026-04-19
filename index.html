@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lion X — AI Platform</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold: #f5a623;
+      --gold-bright: #ffc142;
+      --gold-dim: rgba(245,166,35,0.15);
+      --teal: #14b8a6;
+      --teal-bright: #2dd4bf;
+      --teal-dim: rgba(20,184,166,0.12);
+      --teal-glow: rgba(20,184,166,0.4);
+      --bg: #050508;
+      --bg2: #080812;
+      --bg3: #0c0c1a;
+      --card: #0a0a16;
+      --card2: #0e0e20;
+      --border-t: rgba(20,184,166,0.18);
+      --border-g: rgba(245,166,35,0.18);
+      --text: #dde8f0;
+      --muted: #5a6a7a;
+      --muted2: #8a9aaa;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* PARTICLE CANVAS */
+    #particle-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.45;
+    }
+
+    /* SCANLINE OVERLAY */
+    .scanlines {
+      position: fixed; inset: 0; z-index: 1;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+    }
+
+    /* NAVBAR */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 200;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 60px;
+      background: rgba(5,5,8,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-t);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 20px; font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .nav-logo .lion { font-size: 28px; filter: drop-shadow(0 0 10px var(--gold)); }
+    .nav-logo .lion-x { color: var(--gold); }
+    .nav-logo .eco { color: var(--teal); font-weight: 400; font-size: 14px; margin-left: 2px; }
+    .nav-links { display: flex; gap: 32px; align-items: center; }
+    .nav-links a {
+      color: var(--muted2); text-decoration: none;
+      font-size: 14px; font-weight: 500;
+      transition: color 0.2s;
+      position: relative;
+    }
+    .nav-links a::after {
+      content: '';
+      position: absolute; bottom: -4px; left: 0; right: 0;
+      height: 1px; background: var(--teal);
+      transform: scaleX(0); transition: transform 0.2s;
+    }
+    .nav-links a:hover { color: var(--teal-bright); }
+    .nav-links a:hover::after { transform: scaleX(1); }
+    .nav-cta {
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal);
+      padding: 9px 22px; border-radius: 6px;
+      font-weight: 700; font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .nav-cta:hover {
+      background: var(--teal);
+      color: #000;
+      box-shadow: 0 0 20px var(--teal-glow);
+    }
+
+    /* SECTION WRAPPER */
+    .section-wrap { position: relative; z-index: 10; }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center;
+      text-align: center;
+      padding: 130px 20px 80px;
+      position: relative; z-index: 10;
+    }
+    .hero-glow-1 {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(20,184,166,0.08) 0%, transparent 70%);
+      top: 10%; left: 50%; transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .hero-glow-2 {
+      position: absolute;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,166,35,0.06) 0%, transparent 70%);
+      top: 30%; right: 10%;
+      pointer-events: none;
+    }
+
+    .hero-content { position: relative; z-index: 2; max-width: 860px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid var(--border-t);
+      background: var(--teal-dim);
+      color: var(--teal-bright);
+      font-size: 12px; font-weight: 600;
+      padding: 6px 16px; border-radius: 100px;
+      margin-bottom: 32px;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal);
+      animation: breathe 2s infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--teal); }
+      50% { opacity: 0.4; box-shadow: 0 0 4px var(--teal); }
+    }
+
+    .hero-eyebrow {
+      font-size: 13px; color: var(--teal);
+      font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: clamp(44px, 7.5vw, 88px);
+      font-weight: 900;
+      line-height: 1.0;
+      letter-spacing: -3px;
+      margin-bottom: 24px;
+    }
+    .grad-gold {
+      background: linear-gradient(135deg, var(--gold) 0%, #ff9a00 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(245,166,35,0.5));
+    }
+    .grad-teal {
+      background: linear-gradient(135deg, var(--teal) 0%, #67e8f9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 17px; color: var(--muted2);
+      line-height: 1.8; max-width: 600px;
+      margin: 0 auto 44px;
+      font-weight: 400;
+    }
+    #typewriter { border-right: 2px solid var(--teal); padding-right: 3px; }
+
+    .hero-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold), #e08e00);
+      color: #000; padding: 14px 34px;
+      border-radius: 8px; font-weight: 800;
+      font-size: 15px; cursor: pointer; border: none;
+      font-family: inherit;
+      transition: all 0.25s;
+      box-shadow: 0 4px 20px rgba(245,166,35,0.25);
+    }
+    .btn-gold:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 35px rgba(245,166,35,0.45);
+      filter: brightness(1.1);
+    }
+    .btn-teal-outline {
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal); padding: 14px 34px;
+      border-radius: 8px; font-weight: 700;
+      font-size: 15px; cursor: pointer;
+      font-family: inherit;
+      transition: all 0.25s;
+    }
+    .btn-teal-outline:hover {
+      background: var(--teal-dim);
+      box-shadow: 0 0 20px var(--teal-glow);
+      transform: translateY(-2px);
+    }
+
+    /* SCROLL INDICATOR */
+    .scroll-hint {
+      margin-top: 64px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      color: var(--muted); font-size: 12px;
+      animation: float 3s ease-in-out infinite;
+    }
+    .scroll-line {
+      width: 1px; height: 40px;
+      background: linear-gradient(180deg, var(--teal), transparent);
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+
+    /* STATS BAR */
+    .stats-bar {
+      position: relative; z-index: 10;
+      background: var(--bg2);
+      border-top: 1px solid var(--border-t);
+      border-bottom: 1px solid var(--border-t);
+      padding: 24px 60px;
+      display: flex; justify-content: center;
+      gap: 70px; flex-wrap: wrap;
+    }
+    .stat-item { text-align: center; }
+    .stat-val {
+      font-size: 24px; font-weight: 800;
+      background: linear-gradient(135deg, var(--teal-bright), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label {
+      font-size: 11px; color: var(--muted);
+      font-weight: 500; margin-top: 4px;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10px; color: #22c55e; font-weight: 600;
+      margin-top: 3px;
+    }
+    .live-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+      animation: breathe 1.5s infinite;
+    }
+
+    /* SWAP SECTION */
+    .swap-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .section-eyebrow {
+      font-size: 12px; font-weight: 600;
+      color: var(--teal); text-transform: uppercase;
+      letter-spacing: 2px; margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 46px);
+      font-weight: 800; text-align: center;
+      line-height: 1.1; letter-spacing: -1.5px;
+      margin-bottom: 14px;
+    }
+    .section-sub {
+      font-size: 15px; color: var(--muted2);
+      text-align: center; max-width: 500px;
+      line-height: 1.75; margin-bottom: 56px;
+    }
+
+    .swap-card {
+      background: var(--card);
+      border: 1px solid var(--border-t);
+      border-radius: 20px;
+      padding: 36px;
+      width: 100%; max-width: 460px;
+      position: relative;
+      overflow: hidden;
+    }
+    .swap-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--teal), var(--gold), var(--teal));
+      background-size: 200% 100%;
+      animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .swap-card-glow {
+      position: absolute;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(20,184,166,0.06) 0%, transparent 70%);
+      top: -60px; right: -60px;
+      pointer-events: none;
+    }
+
+    .swap-title {
+      font-size: 17px; font-weight: 700;
+      margin-bottom: 28px;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--text);
+    }
+
+    .token-box {
+      background: var(--bg3);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 6px;
+      transition: border-color 0.2s;
+    }
+    .token-box:hover { border-color: var(--border-t); }
+    .token-box-label {
+      font-size: 11px; color: var(--muted);
+      font-weight: 600; margin-bottom: 10px;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .token-row { display: flex; justify-content: space-between; align-items: center; }
+    .token-amount { font-size: 30px; font-weight: 800; color: white; }
+    .token-chip {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 14px; border-radius: 8px;
+      font-weight: 700; font-size: 14px;
+    }
+    .chip-gold {
+      background: rgba(245,166,35,0.1);
+      border: 1px solid rgba(245,166,35,0.3);
+      color: var(--gold);
+    }
+    .chip-teal {
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+      color: var(--teal-bright);
+    }
+    .token-bal { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .arrow-wrap {
+      text-align: center; padding: 10px 0;
+      font-size: 20px;
+    }
+    .arrow-icon {
+      display: inline-block;
+      color: var(--teal);
+      filter: drop-shadow(0 0 6px var(--teal));
+      animation: arrowBounce 2s ease-in-out infinite;
+    }
+    @keyframes arrowBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(4px); }
+    }
+
+    .swap-details { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.04); }
+    .swap-row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      color: var(--muted);
+    }
+    .swap-row:last-child { border: none; }
+    .swap-row span:last-child { color: var(--text); font-weight: 600; }
+
+    .connect-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--teal) 0%, #0d9488 100%);
+      color: #000; border: none;
+      border-radius: 12px;
+      font-size: 15px; font-weight: 800;
+      cursor: pointer; margin-top: 22px;
+      font-family: inherit;
+      transition: all 0.25s;
+      box-shadow: 0 4px 20px rgba(20,184,166,0.25);
+    }
+    .connect-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(20,184,166,0.45);
+      filter: brightness(1.1);
+    }
+
+    /* COMPARE */
+    .compare-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      max-width: 940px; margin: 0 auto;
+    }
+    .compare-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 20px; margin-top: 56px;
+    }
+    .compare-card {
+      background: var(--card2);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 30px;
+    }
+    .compare-card.new-card {
+      border-color: var(--border-t);
+      background: linear-gradient(135deg, rgba(20,184,166,0.05), var(--card2));
+      box-shadow: 0 0 40px rgba(20,184,166,0.06);
+    }
+    .card-head {
+      font-size: 15px; font-weight: 700;
+      margin-bottom: 22px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .tag-old {
+      font-size: 10px; padding: 2px 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px; color: var(--muted);
+      font-weight: 500;
+    }
+    .tag-new {
+      font-size: 10px; padding: 2px 8px;
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+      border-radius: 4px; color: var(--teal);
+      font-weight: 600;
+    }
+    .c-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 14px; color: var(--muted2);
+    }
+    .c-item:last-child { border: none; }
+    .c-check { color: var(--teal); font-size: 16px; filter: drop-shadow(0 0 4px var(--teal)); }
+    .c-cross { color: #ef4444; font-size: 16px; }
+
+    /* TOOLS */
+    .tools-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      max-width: 1080px; margin: 0 auto;
+      text-align: center;
+    }
+    .tools-grid {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 20px; margin-top: 56px;
+    }
+    .tool-card {
+      background: var(--card);
+      border: 1px solid var(--border-t);
+      border-radius: 18px;
+      padding: 32px 24px;
+      text-align: left;
+      position: relative; overflow: hidden;
+      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+      cursor: default;
+    }
+    .tool-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--teal);
+      box-shadow: 0 16px 50px rgba(20,184,166,0.15);
+    }
+    .tool-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--teal), var(--gold), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .tool-card:hover::before { opacity: 1; }
+    .tool-card-glow {
+      position: absolute;
+      width: 150px; height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(20,184,166,0.08) 0%, transparent 70%);
+      top: -40px; right: -40px;
+      pointer-events: none;
+    }
+    .tool-icon-wrap {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 18px;
+    }
+    .tool-name { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+    .tool-desc {
+      font-size: 14px; color: var(--muted2);
+      line-height: 1.65; margin-bottom: 20px;
+    }
+    .tool-burn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(245,166,35,0.08);
+      border: 1px solid rgba(245,166,35,0.2);
+      padding: 5px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; color: var(--gold);
+    }
+    .soon-tag {
+      position: absolute; top: 16px; right: 16px;
+      background: var(--teal-dim);
+      border: 1px solid var(--border-t);
+      color: var(--teal);
+      font-size: 10px; font-weight: 700;
+      padding: 3px 10px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* TOKENOMICS */
+    .token-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      max-width: 900px; margin: 0 auto;
+      text-align: center;
+    }
+    .token-grid {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 16px; margin-top: 56px;
+    }
+    .token-stat-card {
+      background: var(--card);
+      border: 1px solid var(--border-t);
+      border-radius: 16px;
+      padding: 28px 20px;
+      text-align: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .token-stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(20,184,166,0.1);
+    }
+    .tsc-icon { font-size: 32px; margin-bottom: 12px; }
+    .tsc-val {
+      font-size: 26px; font-weight: 800;
+      color: var(--gold); margin-bottom: 6px;
+    }
+    .tsc-label { font-size: 13px; color: var(--muted2); }
+
+    /* BURN VISUAL */
+    .burn-bar {
+      margin-top: 40px;
+      background: var(--card);
+      border: 1px solid var(--border-t);
+      border-radius: 16px;
+      padding: 28px 32px;
+    }
+    .burn-label {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: var(--muted2);
+      margin-bottom: 12px; font-weight: 600;
+    }
+    .burn-track {
+      height: 8px; background: var(--bg3);
+      border-radius: 100px; overflow: hidden;
+    }
+    .burn-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--gold));
+      border-radius: 100px;
+      width: 0%;
+      transition: width 2s ease;
+      box-shadow: 0 0 10px var(--teal-glow);
+    }
+    .burn-split {
+      display: flex; gap: 12px; margin-top: 20px;
+      font-size: 13px;
+    }
+    .split-item {
+      flex: 1; padding: 14px;
+      background: var(--bg3);
+      border-radius: 10px;
+      text-align: center;
+    }
+    .split-pct {
+      font-size: 22px; font-weight: 800;
+    }
+    .split-pct.burn-pct { color: var(--teal); }
+    .split-pct.treasury-pct { color: var(--gold); }
+    .split-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ROADMAP */
+    .roadmap-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      max-width: 780px; margin: 0 auto;
+      text-align: center;
+    }
+    .roadmap-timeline {
+      margin-top: 56px; text-align: left;
+      position: relative;
+    }
+    .roadmap-timeline::before {
+      content: '';
+      position: absolute;
+      left: 22px; top: 10px; bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, var(--teal), var(--gold), rgba(20,184,166,0.1));
+    }
+    .rm-item {
+      display: flex; gap: 28px;
+      padding-bottom: 48px;
+      opacity: 0;
+      transform: translateX(-20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .rm-item.visible { opacity: 1; transform: translateX(0); }
+    .rm-dot {
+      width: 46px; height: 46px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+      position: relative; z-index: 1;
+    }
+    .rm-dot.active {
+      background: var(--teal);
+      box-shadow: 0 0 20px var(--teal-glow), 0 0 40px rgba(20,184,166,0.2);
+    }
+    .rm-dot.pending {
+      background: var(--card2);
+      border: 2px solid var(--border-t);
+    }
+    .rm-body { padding-top: 10px; }
+    .rm-phase {
+      font-size: 11px; color: var(--teal);
+      font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; margin-bottom: 5px;
+    }
+    .rm-title { font-size: 18px; font-weight: 700; margin-bottom: 7px; }
+    .rm-desc { font-size: 14px; color: var(--muted2); line-height: 1.65; }
+
+    /* CTA */
+    .cta-section {
+      position: relative; z-index: 10;
+      padding: 110px 20px;
+      text-align: center;
+    }
+    .cta-glow {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(20,184,166,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-content { position: relative; z-index: 2; }
+    .cta-section h2 {
+      font-size: clamp(34px, 5vw, 60px);
+      font-weight: 900; letter-spacing: -2px;
+      margin-bottom: 18px;
+    }
+    .cta-section p { font-size: 16px; color: var(--muted2); margin-bottom: 40px; }
+
+    /* FOOTER */
+    footer {
+      position: relative; z-index: 10;
+      border-top: 1px solid var(--border-t);
+      padding: 32px 60px;
+      background: var(--bg2);
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo {
+      font-size: 17px; font-weight: 800;
+      color: var(--teal);
+    }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a {
+      font-size: 13px; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--teal); }
+    .footer-copy { font-size: 12px; color: var(--muted); }
+
+    /* REVEAL ANIMATIONS */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 14px 20px; }
+      .nav-links { display: none; }
+      .stats-bar { gap: 28px; padding: 20px; }
+      .compare-grid, .tools-grid, .token-grid { grid-template-columns: 1fr; }
+      footer { padding: 24px 20px; justify-content: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="particle-canvas"></canvas>
+<div class="scanlines"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <span class="lion">🦁</span>
+    <span class="lion-x">LION X</span>
+    <span class="eco">ecosystem</span>
+  </div>
+  <div class="nav-links">
+    <a href="#swap">Migrate</a>
+    <a href="#tools">AI Tools</a>
+    <a href="#tokenomics">Tokenomics</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="https://t.me/Lionxone" target="_blank">Community</a>
+  </div>
+  <button class="nav-cta" onclick="scrollTo('swap')">Connect Wallet</button>
+</nav>
+
+<!-- HERO -->
+<section class="hero section-wrap">
+  <div class="hero-glow-1"></div>
+  <div class="hero-glow-2"></div>
+  <div class="hero-content">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      Migration Now Live — Upgrade Your LDA
+    </div>
+    <h1>
+      The Future of<br/>
+      <span class="grad-teal">AI-Powered</span><br/>
+      <span class="grad-gold">Crypto Tools</span>
+    </h1>
+    <p class="hero-sub">
+      Token-gated AI intelligence for Tron. Burn LDA v2 to access<br/>
+      <span id="typewriter">wallet analysis, contract audits &amp; market intelligence.</span>
+    </p>
+    <div class="hero-btns">
+      <button class="btn-gold" onclick="scrollTo('swap')">🔄 Migrate to LDA v2</button>
+      <button class="btn-teal-outline" onclick="scrollTo('tools')">Explore AI Tools →</button>
+    </div>
+    <div class="scroll-hint">
+      <div class="scroll-line"></div>
+      <span>scroll</span>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar section-wrap">
+  <div class="stat-item">
+    <div class="stat-val" data-count="20207717">0</div>
+    <div class="stat-label">Old LDA Supply</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" data-count="10000000">0</div>
+    <div class="stat-label">LDA v2 Max Supply</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" data-count="281">0</div>
+    <div class="stat-label">Existing Holders</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" data-count="0">0</div>
+    <div class="stat-label">Tokens Burned</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="countdown">30d 00h 00m</div>
+    <div class="stat-label">Migration Window</div>
+    <div class="live-badge"><span class="live-dot"></span> Live</div>
+  </div>
+</div>
+
+<!-- SWAP -->
+<section class="swap-section section-wrap" id="swap">
+  <div class="section-eyebrow reveal">Token Migration</div>
+  <h2 class="section-title reveal">Upgrade Your LDA</h2>
+  <p class="section-sub reveal">
+    Swap original LDA for LDA v2. Migration window open for 30 days only. 2:1 ratio.
+  </p>
+  <div class="swap-card reveal">
+    <div class="swap-card-glow"></div>
+    <div class="swap-title">🔄 LDA → LDA v2 Migration</div>
+    <div class="token-box">
+      <div class="token-box-label">You Send</div>
+      <div class="token-row">
+        <div class="token-amount" id="send-amt">—</div>
+        <div class="token-chip chip-gold">🦁 LDA</div>
+      </div>
+      <div class="token-bal" id="wallet-bal">Connect wallet to see balance</div>
+    </div>
+    <div class="arrow-wrap"><span class="arrow-icon">↓</span></div>
+    <div class="token-box">
+      <div class="token-box-label">You Receive</div>
+      <div class="token-row">
+        <div class="token-amount" id="recv-amt">—</div>
+        <div class="token-chip chip-teal">⚡ LDA v2</div>
+      </div>
+      <div class="token-bal">New platform utility token</div>
+    </div>
+    <div class="swap-details">
+      <div class="swap-row"><span>Exchange Rate</span><span>2 LDA = 1 LDA v2</span></div>
+      <div class="swap-row"><span>Network</span><span>Tron (TRC-20)</span></div>
+      <div class="swap-row"><span>Est. Gas</span><span>~0.1 TRX</span></div>
+      <div class="swap-row"><span>Migration Deadline</span><span style="color:var(--gold)" id="deadline-tag">30 days remaining</span></div>
+    </div>
+    <button class="connect-btn" id="main-btn" onclick="handleBtn()">
+      Connect TronLink Wallet
+    </button>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare-section section-wrap" id="compare">
+  <div style="text-align:center">
+    <div class="section-eyebrow reveal">Why Upgrade</div>
+    <h2 class="section-title reveal">Old vs New</h2>
+    <p class="section-sub reveal">LDA v2 is purpose-built for the platform. Same community — better tokenomics.</p>
+  </div>
+  <div class="compare-grid">
+    <div class="compare-card reveal">
+      <div class="card-head">Original LDA <span class="tag-old">Legacy</span></div>
+      <div class="c-item"><span class="c-cross">✗</span> No burn mechanism</div>
+      <div class="c-item"><span class="c-cross">✗</span> Mintable supply (inflationary)</div>
+      <div class="c-item"><span class="c-cross">✗</span> No platform utility</div>
+      <div class="c-item"><span class="c-cross">✗</span> Zero on-chain liquidity</div>
+      <div class="c-item"><span class="c-cross">✗</span> Dormant since 2021</div>
+    </div>
+    <div class="compare-card new-card reveal">
+      <div class="card-head">LDA v2 <span class="tag-new">Upgraded</span></div>
+      <div class="c-item"><span class="c-check">✓</span> Native burn on every AI query</div>
+      <div class="c-item"><span class="c-check">✓</span> Hard capped supply — no inflation</div>
+      <div class="c-item"><span class="c-check">✓</span> Powers all AI tools on the platform</div>
+      <div class="c-item"><span class="c-check">✓</span> Seeded liquidity on SunSwap</div>
+      <div class="c-item"><span class="c-check">✓</span> Deflationary — shrinks with usage</div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLS -->
+<section class="tools-section section-wrap" id="tools">
+  <div class="section-eyebrow reveal">AI Tools</div>
+  <h2 class="section-title reveal">What LDA v2 Unlocks</h2>
+  <p class="section-sub reveal">Three AI tools at launch. Community builders add more.</p>
+  <div class="tools-grid">
+    <div class="tool-card reveal">
+      <div class="tool-card-glow"></div>
+      <span class="soon-tag">Live at Launch</span>
+      <div class="tool-icon-wrap">🔍</div>
+      <div class="tool-name">Wallet Analyzer</div>
+      <div class="tool-desc">Drop any Tron wallet. Get portfolio breakdown, trading patterns, whale/bot score, and full risk profile.</div>
+      <div class="tool-burn">🔥 50 LDA v2 per report</div>
+    </div>
+    <div class="tool-card reveal">
+      <div class="tool-card-glow"></div>
+      <span class="soon-tag">Live at Launch</span>
+      <div class="tool-icon-wrap">🛡️</div>
+      <div class="tool-name">Contract Auditor</div>
+      <div class="tool-desc">Paste any TRC-20 contract. AI scans for honeypots, rug indicators, ownership concentration, and hidden risks.</div>
+      <div class="tool-burn">🔥 100 LDA v2 per audit</div>
+    </div>
+    <div class="tool-card reveal">
+      <div class="tool-card-glow"></div>
+      <span class="soon-tag">Live at Launch</span>
+      <div class="tool-icon-wrap">📊</div>
+      <div class="tool-name">Market Intelligence</div>
+      <div class="tool-desc">Token deep dives — sentiment, holder trends, buy/sell pressure, and AI-powered market commentary.</div>
+      <div class="tool-burn">🔥 25 LDA v2 per query</div>
+    </div>
+  </div>
+</section>
+
+<!-- TOKENOMICS -->
+<section class="token-section section-wrap" id="tokenomics">
+  <div class="section-eyebrow reveal">Tokenomics</div>
+  <h2 class="section-title reveal">Built to Burn</h2>
+  <p class="section-sub reveal">Every AI query reduces supply. Usage = deflation = value.</p>
+  <div class="token-grid">
+    <div class="token-stat-card reveal">
+      <div class="tsc-icon">🔒</div>
+      <div class="tsc-val">10M</div>
+      <div class="tsc-label">Hard Cap — Max Supply</div>
+    </div>
+    <div class="token-stat-card reveal">
+      <div class="tsc-icon">🔥</div>
+      <div class="tsc-val">70%</div>
+      <div class="tsc-label">Burned Per Transaction</div>
+    </div>
+    <div class="token-stat-card reveal">
+      <div class="tsc-icon">🏦</div>
+      <div class="tsc-val">30%</div>
+      <div class="tsc-label">Treasury — Platform Dev</div>
+    </div>
+  </div>
+  <div class="burn-bar reveal">
+    <div class="burn-label">
+      <span>Burn Allocation</span>
+      <span style="color:var(--teal)">70% Burned / 30% Treasury</span>
+    </div>
+    <div class="burn-track">
+      <div class="burn-fill" id="burn-fill" style="width:0%"></div>
+    </div>
+    <div class="burn-split">
+      <div class="split-item">
+        <div class="split-pct burn-pct">70%</div>
+        <div class="split-desc">🔥 Burned Forever</div>
+      </div>
+      <div class="split-item">
+        <div class="split-pct treasury-pct">30%</div>
+        <div class="split-desc">🏦 Platform Treasury</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section class="roadmap-section section-wrap" id="roadmap">
+  <div class="section-eyebrow reveal">Roadmap</div>
+  <h2 class="section-title reveal">The Build Plan</h2>
+  <p class="section-sub reveal">No vaporware. Shipping fast.</p>
+  <div class="roadmap-timeline">
+    <div class="rm-item">
+      <div class="rm-dot active">🦁</div>
+      <div class="rm-body">
+        <div class="rm-phase">Phase 1 — Now</div>
+        <div class="rm-title">LDA v2 Migration Live</div>
+        <div class="rm-desc">Contract deployed. 30-day migration window open. Existing LDA holders claim v2 at 2:1. LP seeded on SunSwap.</div>
+      </div>
+    </div>
+    <div class="rm-item">
+      <div class="rm-dot pending">⚡</div>
+      <div class="rm-body">
+        <div class="rm-phase">Phase 2 — Coming Soon</div>
+        <div class="rm-title">Platform Beta</div>
+        <div class="rm-desc">All 3 AI tools live. LDA v2 burn mechanics active. Beta access for migrated holders first.</div>
+      </div>
+    </div>
+    <div class="rm-item">
+      <div class="rm-dot pending">🌐</div>
+      <div class="rm-body">
+        <div class="rm-phase">Phase 3 — Q3 2026</div>
+        <div class="rm-title">Public Launch + Builder SDK</div>
+        <div class="rm-desc">Open to third-party builders. MANES utility integration. Mafia Manes holder perks activated.</div>
+      </div>
+    </div>
+    <div class="rm-item">
+      <div class="rm-dot pending">🏪</div>
+      <div class="rm-body">
+        <div class="rm-phase">Phase 4 — Q4 2026</div>
+        <div class="rm-title">AI Agent Marketplace</div>
+        <div class="rm-desc">Full marketplace. MANES merch store. Enterprise licensing. Lion X becomes the AI infrastructure layer for Tron.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section section-wrap">
+  <div class="cta-glow"></div>
+  <div class="cta-content">
+    <h2>Don't Hold the <span class="grad-gold">Old Version.</span></h2>
+    <p>Migration window is live. Upgrade your position before it closes.</p>
+    <button class="btn-gold" style="font-size:16px;padding:16px 44px;" onclick="scrollTo('swap')">
+      🔄 Migrate to LDA v2 Now
+    </button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">🦁 LION X</div>
+  <div class="footer-links">
+    <a href="https://lionxeco.net" target="_blank">Website</a>
+    <a href="https://twitter.com/LionX05494692" target="_blank">Twitter</a>
+    <a href="https://t.me/Lionxone" target="_blank">Telegram</a>
+    <a href="https://tronscan.org/#/token20/TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1" target="_blank">Tronscan</a>
+  </div>
+  <div class="footer-copy">© 2026 Lion X Ecosystem · Built on Tron</div>
+</footer>
+
+<script>
+/* ── PARTICLES ── */
+const canvas = document.getElementById('particle-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.size = Math.random() * 1.5 + 0.3;
+    this.speedX = (Math.random() - 0.5) * 0.4;
+    this.speedY = (Math.random() - 0.5) * 0.4;
+    this.opacity = Math.random() * 0.5 + 0.1;
+    this.color = Math.random() > 0.6 ? '#14b8a6' : Math.random() > 0.5 ? '#f5a623' : '#ffffff';
+  }
+  update() {
+    this.x += this.speedX;
+    this.y += this.speedY;
+    if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+for (let i = 0; i < 120; i++) particles.push(new Particle());
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => { p.update(); p.draw(); });
+  // Draw connecting lines
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 80) {
+        ctx.save();
+        ctx.globalAlpha = (1 - dist/80) * 0.08;
+        ctx.strokeStyle = '#14b8a6';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+/* ── TYPEWRITER ── */
+const phrases = [
+  'wallet analysis, contract audits & market intelligence.',
+  'on-chain insights powered by LDA v2.',
+  'the AI layer Tron has been waiting for.'
+];
+let pi = 0, ci = 0, deleting = false;
+function typeLoop() {
+  const el = document.getElementById('typewriter');
+  if (!el) return;
+  const phrase = phrases[pi];
+  if (!deleting) {
+    el.textContent = phrase.slice(0, ci + 1);
+    ci++;
+    if (ci === phrase.length) { deleting = true; setTimeout(typeLoop, 2200); return; }
+  } else {
+    el.textContent = phrase.slice(0, ci - 1);
+    ci--;
+    if (ci === 0) { deleting = false; pi = (pi + 1) % phrases.length; }
+  }
+  setTimeout(typeLoop, deleting ? 40 : 60);
+}
+typeLoop();
+
+/* ── SCROLL REVEAL ── */
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ── ROADMAP ITEMS ── */
+const rmObs = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 150);
+    }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.rm-item').forEach(el => rmObs.observe(el));
+
+/* ── COUNTER ANIMATION ── */
+function animateCounter(el, target) {
+  const dur = 2000;
+  const start = Date.now();
+  function tick() {
+    const p = Math.min((Date.now() - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.floor(ease * target).toLocaleString();
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  tick();
+}
+const statObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const count = parseInt(e.target.dataset.count);
+      if (!isNaN(count)) animateCounter(e.target, count);
+      statObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.5 });
+document.querySelectorAll('[data-count]').forEach(el => statObs.observe(el));
+
+/* ── BURN BAR ── */
+const burnObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      setTimeout(() => {
+        document.getElementById('burn-fill').style.width = '70%';
+      }, 400);
+      burnObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.3 });
+const burnBar = document.querySelector('.burn-bar');
+if (burnBar) burnObs.observe(burnBar);
+
+/* ── COUNTDOWN ── */
+const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+function updateCountdown() {
+  const diff = deadline - Date.now();
+  if (diff <= 0) { document.getElementById('countdown').textContent = 'Closed'; return; }
+  const d = Math.floor(diff/86400000);
+  const h = Math.floor((diff%86400000)/3600000);
+  const m = Math.floor((diff%3600000)/60000);
+  const s = Math.floor((diff%60000)/1000);
+  document.getElementById('countdown').textContent = `${d}d ${h}h ${m}m ${s}s`;
+}
+setInterval(updateCountdown, 1000);
+updateCountdown();
+
+/* ── WALLET / SWAP ── */
+let step = 0;
+function handleBtn() {
+  const btn = document.getElementById('main-btn');
+  if (step === 0) {
+    btn.textContent = 'Connecting to TronLink...';
+    btn.style.background = 'rgba(20,184,166,0.3)';
+    btn.style.color = 'var(--teal)';
+    setTimeout(() => {
+      step = 1;
+      const bal = Math.floor(Math.random() * 800000) + 50000;
+      document.getElementById('send-amt').textContent = bal.toLocaleString();
+      document.getElementById('recv-amt').textContent = Math.floor(bal/2).toLocaleString();
+      document.getElementById('wallet-bal').textContent = `Balance: ${bal.toLocaleString()} LDA`;
+      btn.textContent = '⚡ Confirm Migration to LDA v2';
+      btn.style.background = 'linear-gradient(135deg, var(--teal), #0d9488)';
+      btn.style.color = '#000';
+    }, 1600);
+  } else if (step === 1) {
+    step = 2;
+    btn.textContent = 'Broadcasting on Tron...';
+    btn.style.background = 'rgba(245,166,35,0.2)';
+    btn.style.color = 'var(--gold)';
+    setTimeout(() => {
+      step = 3;
+      btn.textContent = '✅ Migration Complete — Welcome to LDA v2';
+      btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
+      btn.style.color = '#fff';
+      btn.style.boxShadow = '0 0 20px rgba(22,163,74,0.4)';
+      document.getElementById('wallet-bal').textContent = '🎉 LDA v2 tokens sent to your wallet';
+    }, 2200);
+  }
+}
+
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
