@@ -7,3 +7,5 @@ out/
 .vercel/
 *.log
 .DS_Store
+tronbox/.env
+tronbox/build/
