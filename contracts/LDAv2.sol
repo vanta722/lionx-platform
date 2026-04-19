@@ -12,7 +12,7 @@ pragma solidity ^0.8.19;
  * Lion Digital Alliance V2 — LDA
  * Token-gated AI platform token on Tron
  *
- * Max Supply:    20,000,000 LDA v2
+ * Max Supply:    10,000,000 LDA v2
  * Decimals:      6
  * Burn Split:    70% burned / 30% treasury
  * Network:       Tron (TRC-20 / TVM)
@@ -52,7 +52,7 @@ contract LDAv2 is ITRC20 {
     uint8  public constant decimals = 6;
 
     // ── Hard Cap — NEVER changes ──
-    uint256 public constant MAX_SUPPLY = 20_000_000 * 10**6; // 20M tokens
+    uint256 public constant MAX_SUPPLY = 10_000_000 * 10**6; // 10M tokens
 
     // ── Supply tracking ──
     uint256 private _totalSupply;

@@ -17,23 +17,23 @@ LDAPlatform.sol    ← AI query gateway (needs LDAv2 address)
 4. Deploy `LDAPlatform.sol(newLDA)`
 5. On LDAv2: `setAuthorizedPlatform(platformAddress, true)`
 6. On LDAv2: `setStakingContract(stakingAddress)`
-7. On LDAv2: `mint(migrationContract, 10_000_000)` → 10M for migration pool
-8. On LDAv2: `mint(owner, 5_000_000)` → 5M for LP + team
-9. On LDAv2: `mint(stakingContract, 2_000_000)` → 2M for staking rewards
-10. On LDAv2: `mint(treasury, 3_000_000)` → 3M for platform reserve
+7. On LDAv2: `mint(migrationContract, 5_000_000)` → 5M for migration pool
+8. On LDAv2: `mint(owner, 1_500_000)` → 1.5M for LP seed
+9. On LDAv2: `mint(stakingContract, 1_500_000)` → 1.5M for staking rewards
+10. On LDAv2: `mint(treasury, 2_000_000)` → 2M for platform reserve
 
-Total minted at launch = 20M (hard cap hit, no further minting)
+Total minted at launch = 10M (hard cap hit, no further minting)
 
 ## Token Allocation at Launch
 
 | Allocation        | Amount  | %   |
 |-------------------|---------|-----|
-| Migration pool    | 10M     | 50% |
-| LP seed           | 2M      | 10% |
-| Team (vested)     | 3M      | 15% |
-| Staking rewards   | 2M      | 10% |
-| Platform reserve  | 3M      | 15% |
-| **Total**         | **20M** | 100%|
+| Migration pool    | 5M      | 50% |
+| LP seed           | 1M      | 10% |
+| Team (vested)     | 1.5M    | 15% |
+| Staking rewards   | 1.5M    | 15% |
+| Platform reserve  | 1M      | 10% |
+| **Total**         | **10M** | 100%|
 
 ## Burn Mechanics
 
