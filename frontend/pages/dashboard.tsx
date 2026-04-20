@@ -113,19 +113,23 @@ export default function Dashboard() {
   async function fetchLiveStats() {
     try {
 
-      const [tokenRes, burnRes] = await Promise.all([
+      // Use /api/account on black hole — trc20token_balances has exact LDA balance
+      const [tokenRes, burnAccountRes] = await Promise.all([
         fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1`),
-        fetch(`https://apilist.tronscanapi.com/api/account/tokens?address=${BLACK_HOLE}&token=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1`),
+        fetch(`https://apilist.tronscanapi.com/api/account?address=${BLACK_HOLE}`),
       ])
-      const tokenData = await tokenRes.json()
-      const burnData  = await burnRes.json()
+      const tokenData       = await tokenRes.json()
+      const burnAccountData = await burnAccountRes.json()
 
       const token      = tokenData?.trc20_tokens?.[0]
       const holders    = Number(token?.holder_count || 281)
       const totalSupply = Number(token?.total_supply_with_decimals || 0) / 1e6 || LDA_SUPPLY
-      // Black hole balance = real burned LDA — confirmed 1,050,000+ on Tronscan
-      const burnedRaw  = burnData?.data?.[0]?.quantity || burnData?.tokenBalances?.[0]?.balance || '1050000000000'
-      const totalBurned = Number(burnedRaw) / 1e6 || 1_050_000
+
+      // Find LDA in black hole's token balances
+      const ldaEntry   = burnAccountData?.trc20token_balances?.find(
+        (t: any) => t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+      )
+      const totalBurned = ldaEntry ? Number(ldaEntry.balance) / 1e6 : 1_050_000
       const circulating = totalSupply - totalBurned
 
       let treasuryBal = 0
@@ -257,27 +261,24 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── MIGRATION BANNER ── */}
-          <div className="relative rounded-2xl p-6 mb-6 overflow-hidden" style={{ background: '#0a0a16', border: `1px solid ${stats.platformActive ? 'rgba(245,166,35,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-            <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: stats.platformActive ? 'linear-gradient(90deg,#f5a623,#14b8a6,#f5a623)' : '#ef4444', backgroundSize:'200% 100%', animation:'shimmer 3s linear infinite' }}/>
+          {/* ── BURN BANNER ── */}
+          <div className="relative rounded-2xl p-6 mb-6 overflow-hidden" style={{ background: '#0a0a16', border: '1px solid rgba(245,166,35,0.3)' }}>
+            <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: 'linear-gradient(90deg,#f5a623,#ef4444,#f5a623)', backgroundSize:'200% 100%', animation:'shimmer 3s linear infinite' }}/>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: stats.platformActive ? '#f5a623' : '#ef4444', boxShadow: `0 0 8px ${stats.platformActive ? '#f5a623' : '#ef4444'}`, animation: 'breathe 1.5s infinite' }}/>
-                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: stats.platformActive ? '#f5a623' : '#ef4444' }}>
-                    Platform {stats.platformActive ? 'ACTIVE' : 'PAUSED'}
-                  </span>
+                  <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e', boxShadow: '0 0 8px #22c55e', animation: 'breathe 1.5s infinite' }}/>
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#22c55e' }}>Platform Active</span>
                 </div>
                 <div className="font-black text-xl mb-1">🔥 LDA Burn Platform — Live Stats</div>
                 <div className="text-sm" style={{ color: '#7a8a9a' }}>
-                  Every query burns LDA permanently. 70% destroyed, 30% to treasury.
+                  Every AI query burns LDA permanently. 70% sent to black hole, 30% to treasury.
                 </div>
               </div>
               <div className="flex flex-col items-center md:items-end gap-2">
-                {stats.platformActive && <Countdown seconds={stats.timeRemaining}/>}
                 <Link href="/tools" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline text-center"
                   style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', minWidth: 160 }}>
-                  Use AI Tools →
+                  ⚡ Use AI Tools
                 </Link>
               </div>
             </div>
@@ -285,16 +286,14 @@ export default function Dashboard() {
             {/* Burn progress bar */}
             <div className="mt-5">
               <div className="flex justify-between text-xs mb-2" style={{ color: '#7a8a9a' }}>
-                <span>Total LDA Burned: <strong style={{color:'#f5a623'}}>{fmtNum(stats.totalSpent)} / {fmtNum(LDA_SUPPLY)}</strong></span>
-                <span>{stats.burnedPct ? stats.burnedPct.toFixed(2) + '% burned' : '0% burned'}</span>
+                <span>Total LDA Burned: <strong style={{color:'#ef4444'}}>{fmtNum(stats.burnedSupply)}</strong>
+                  <span style={{color:'#4a5a6a'}}> / {fmtNum(LDA_SUPPLY)} supply</span>
+                </span>
+                <span style={{color:'#ef4444'}}>{stats.burnedPct ? stats.burnedPct.toFixed(2) + '% burned' : '0% burned'}</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: '#0c0c18' }}>
                 <div className="h-full rounded-full transition-all duration-1000"
-                  style={{ width: `${stats.burnedPct}%`, background: 'linear-gradient(90deg,#f5a623,#14b8a6)' }}/>
-              </div>
-              <div className="flex justify-between text-xs mt-1.5">
-                <span style={{ color: '#4a5a6a' }}>LDA Created: {fmtNum(stats.totalBurned)}</span>
-                <span style={{ color: '#4a5a6a' }}>Hard Cap: {fmtNum(LDA_SUPPLY)}</span>
+                  style={{ width: `${Math.max(stats.burnedPct || 0, 0.1)}%`, background: 'linear-gradient(90deg,#ef4444,#f5a623)' }}/>
               </div>
             </div>
           </div>

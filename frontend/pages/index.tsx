@@ -101,21 +101,23 @@ export default function Home() {
   useEffect(() => {
     async function fetchTokenStats() {
       try {
-        const [tokenRes, burnRes] = await Promise.all([
+        // Query black hole account — trc20token_balances has exact LDA balance
+        const [tokenRes, burnAccountRes] = await Promise.all([
           fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_TOKEN}`),
-          fetch(`https://apilist.tronscanapi.com/api/account/tokens?address=${BLACK_HOLE}&token=${LDA_TOKEN}`),
+          fetch(`https://apilist.tronscanapi.com/api/account?address=${BLACK_HOLE}`),
         ])
-        const tokenData = await tokenRes.json()
-        const burnData  = await burnRes.json()
+        const tokenData       = await tokenRes.json()
+        const burnAccountData = await burnAccountRes.json()
 
         const token = tokenData?.trc20_tokens?.[0]
         if (token) setHolders(Number(token.holder_count || 281))
 
-        // Black hole balance = real burned LDA
-        const burnedRaw = burnData?.data?.[0]?.quantity || burnData?.tokenBalances?.[0]?.balance || '0'
-        const burned = Number(burnedRaw) / 1e6
-        if (burned > 0) setTotalBurned(burned)
-        else setTotalBurned(1_050_000) // fallback — confirmed on Tronscan Apr 2026
+        // Find LDA in black hole token balances — real burned supply
+        const ldaEntry = burnAccountData?.trc20token_balances?.find(
+          (t: any) => t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+        )
+        const burned = ldaEntry ? Number(ldaEntry.balance) / 1e6 : 1_050_000
+        setTotalBurned(burned)
       } catch {
         setTotalBurned(1_050_000) // fallback
       }
