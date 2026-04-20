@@ -221,23 +221,20 @@ async function verifyBurnTx(
       return { valid: false, reason: 'Wrong destination — must send to Lion X treasury' }
     }
 
-    // Must be FROM the claimed wallet (normalize — TronLink mobile may return hex)
-    if (expectedFrom) {
-      const fromNorm = trc20.from_address?.toLowerCase()
-      const expNorm  = expectedFrom?.toLowerCase()
-      // Accept if either matches or if address is empty (walletless query)
-      if (fromNorm && expNorm && fromNorm !== expNorm && !expNorm.startsWith('0x')) {
-        // Only reject if we have clear mismatch — be lenient on mobile
-        console.log(`[lionx] addr mismatch: tx=${fromNorm} claimed=${expNorm}`)
-      }
+    // Log for debugging
+    console.log(`[lionx] verify: from=${trc20.from_address} to=${trc20.to_address} amount=${trc20.amount_str} tool=${tool}`)
+
+    // Must meet minimum tool cost — amount_str is raw (6 decimals)
+    const minCost   = TOOL_COSTS[tool] || 25
+    const rawAmount = trc20.amount_str || trc20.amount || '0'
+    const amountLDA = Number(rawAmount) / 1_000_000
+    console.log(`[lionx] amount check: raw=${rawAmount} lda=${amountLDA} need=${minCost}`)
+
+    if (amountLDA < minCost) {
+      return { valid: false, reason: `Insufficient payment — need ${minCost} LDA, received ${amountLDA.toFixed(2)} LDA` }
     }
 
-    // Must meet minimum tool cost
-    const minCost = TOOL_COSTS[tool] || 25
-    const amountLDA = Number(trc20.amount_str || trc20.amount || '0') / 1_000_000
-    if (amountLDA < minCost) {
-      return { valid: false, reason: `Insufficient payment — need ${minCost} LDA, got ${amountLDA.toFixed(2)}` }
-    }
+    // from_address check removed — replay protection handles abuse
 
     return { valid: true }
   } catch {

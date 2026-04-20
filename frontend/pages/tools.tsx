@@ -96,7 +96,7 @@ export default function Tools() {
       })
       clearTimeout(timeout)
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Analysis failed')
+      if (!res.ok) throw new Error(data.error || `API error ${res.status} — please try again`)
       setResult(data)
       setRunState('done')
       setHistory(h => [{ tool: tool.name, input: input.slice(0,22)+'...', cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
