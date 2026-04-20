@@ -160,7 +160,7 @@ function isReplay(txHash: string): boolean {
 }
 
 // LDA token contract and treasury receiving address
-const LDA_TOKEN    = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+const LDA_TOKEN     = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 const TREASURY_ADDR = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
 
 // Tool minimum costs (LDA) — must match frontend TOOLS array
@@ -170,76 +170,56 @@ const TOOL_COSTS: Record<string, number> = {
   MARKET_INTEL:     25,
 }
 
-// Verify a direct LDA transfer to treasury happened on-chain
-// No smart contract needed — just a TRC-20 transfer
-async function verifyBurnTx(
-  txHash: string,
-  expectedFrom: string,
+// Track recently-used wallet+tool combos for replay protection (no txHash needed)
+const recentWalletQueries = new Map<string, number>() // "address:tool" → timestamp
+const WALLET_COOLDOWN_MS  = 5 * 60 * 1000 // 5 min cooldown per wallet per tool
+
+// Look up the most recent LDA transfer FROM wallet TO treasury (within last 5 min)
+// No txHash needed — server-side Tronscan lookup is more reliable than client-side hash
+async function lookupAndVerify(
+  fromWallet: string,
   tool: string
-): Promise<{ valid: boolean; reason?: string }> {
+): Promise<{ valid: boolean; reason?: string; txHash?: string }> {
   try {
-    // Retry up to 3 times — Tronscan can lag on fresh transactions
-    let tx: any = null
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.contractRet === 'SUCCESS') { tx = data; break }
+    const minCost = TOOL_COSTS[tool] || 25
+    const since   = Date.now() - 5 * 60 * 1000 // last 5 minutes
+
+    // Retry up to 4 times (Tronscan indexes new txs within ~10s)
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const res = await fetch(
+        `https://apilist.tronscanapi.com/api/contract/events?contract=${LDA_TOKEN}&toAddress=${TREASURY_ADDR}&limit=10`
+      )
+      if (!res.ok) { await new Promise(r => setTimeout(r, 3000)); continue }
+      const data = await res.json()
+      const events: any[] = data?.data || []
+
+      for (const evt of events) {
+        const ts     = Number(evt.timestamp || 0)
+        const amount = Number(evt.amount || 0) / 1_000_000
+        const from   = evt.transferFromAddress || evt.from_address || ''
+
+        // Must be recent
+        if (ts < since) continue
+        // Must be right amount
+        if (amount < minCost) continue
+        // Must be from this wallet (if wallet known)
+        if (fromWallet && from && from !== fromWallet) continue
+
+        // Check replay — use the event hash as dedup key
+        const txHash = evt.transactionHash || evt.transaction_id || `${from}-${ts}`
+        if (isReplay(txHash)) continue
+
+        console.log(`[lionx] ✅ verified: ${from} → ${amount} LDA for ${tool} hash=${txHash}`)
+        return { valid: true, txHash }
       }
-      if (attempt < 3) await new Promise(r => setTimeout(r, 4000)) // wait 4s between retries
+
+      if (attempt < 4) await new Promise(r => setTimeout(r, 3500))
     }
 
-    if (!tx) return { valid: false, reason: 'Transaction not found or not yet confirmed — wait a few seconds and retry' }
-
-    // Must be confirmed
-    if (tx.contractRet !== 'SUCCESS') {
-      return { valid: false, reason: 'Transaction failed on-chain' }
-    }
-
-    // Must be recent (within 20 minutes)
-    const txAge = Date.now() - tx.timestamp
-    if (txAge > 20 * 60 * 1000) {
-      return { valid: false, reason: 'Transaction too old — must be within 20 minutes' }
-    }
-
-    // Must be a TRC-20 token transfer (contractType 31)
-    if (tx.contractType !== 31) {
-      return { valid: false, reason: 'Not a TRC-20 transfer' }
-    }
-
-    // Extract transfer details from trc20TransferInfo
-    const trc20 = tx.trc20TransferInfo?.[0]
-    if (!trc20) return { valid: false, reason: 'No TRC-20 transfer data found' }
-
-    // Must be LDA token
-    if (trc20.contract_address !== LDA_TOKEN) {
-      return { valid: false, reason: 'Wrong token — must send LDA' }
-    }
-
-    // Must be sent TO treasury wallet
-    if (trc20.to_address !== TREASURY_ADDR) {
-      return { valid: false, reason: 'Wrong destination — must send to Lion X treasury' }
-    }
-
-    // Log for debugging
-    console.log(`[lionx] verify: from=${trc20.from_address} to=${trc20.to_address} amount=${trc20.amount_str} tool=${tool}`)
-
-    // Must meet minimum tool cost — amount_str is raw (6 decimals)
-    const minCost   = TOOL_COSTS[tool] || 25
-    const rawAmount = trc20.amount_str || trc20.amount || '0'
-    const amountLDA = Number(rawAmount) / 1_000_000
-    console.log(`[lionx] amount check: raw=${rawAmount} lda=${amountLDA} need=${minCost}`)
-
-    if (amountLDA < minCost) {
-      return { valid: false, reason: `Insufficient payment — need ${minCost} LDA, received ${amountLDA.toFixed(2)} LDA` }
-    }
-
-    // from_address check removed — replay protection handles abuse
-
-    return { valid: true }
-  } catch {
-    // Fail-closed — never grant free access if verification fails
-    return { valid: false, reason: 'Verification service unavailable — retry shortly' }
+    return { valid: false, reason: 'Payment not found — make sure you sent LDA to the treasury and try again in a few seconds' }
+  } catch (e: any) {
+    console.error('[lionx] verify error:', e.message)
+    return { valid: false, reason: 'Verification service unavailable — please retry' }
   }
 }
 
@@ -253,17 +233,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(429).json({ error: 'Rate limit exceeded — max 10 queries per minute' })
   }
 
-  const { tool, input, address, txHash } = req.body
+  const { tool, input, address } = req.body
   if (!tool || !input) return res.status(400).json({ error: 'Missing tool or input' })
 
-  // Require proof-of-burn: txHash from the on-chain executeQuery() call
-  if (!txHash) return res.status(403).json({ error: 'Missing txHash — execute query on-chain first' })
-
-  // Replay protection — each txHash can only be used once
-  if (isReplay(txHash)) return res.status(403).json({ error: 'Transaction already used — each burn grants one query' })
-
-  const verification = await verifyBurnTx(txHash, address, tool)
-  if (!verification.valid) return res.status(403).json({ error: `Transaction invalid: ${verification.reason}` })
+  // Look up recent LDA payment on-chain — no txHash needed
+  const verification = await lookupAndVerify(address || '', tool)
+  if (!verification.valid) return res.status(403).json({ error: verification.reason })
 
   const promptFn = TOOL_PROMPTS[tool]
   if (!promptFn) return res.status(400).json({ error: 'Unknown tool' })

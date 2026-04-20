@@ -76,27 +76,25 @@ export default function Tools() {
       const lda      = await tw.contract().at(LDA_V1)
       const amount   = (tool.cost * 1_000_000).toString() // LDA has 6 decimals
       setRunState('running')
-      const txResult = await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
-      // txResult can be a string (txHash) or object — normalize it
-      const txHash = typeof txResult === 'string' ? txResult : txResult?.txid || txResult?.transaction?.txID || txResult
+      // Send LDA to treasury — don't rely on txHash from TronLink (format varies by client)
+      await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
 
-      if (!txHash || txHash === '[object Object]') throw new Error('Transfer failed — no txHash returned')
+      // Wait for Tron block confirmation (~3s blocks, wait 10s to be safe)
+      await new Promise(r => setTimeout(r, 10000))
 
-      // Wait for Tron block confirmation (3s blocks, give it 12s to be safe)
-      await new Promise(r => setTimeout(r, 12000))
-
-      // Call API with 45s timeout
+      // API looks up the latest transaction from this wallet to treasury
+      // No txHash needed — server-side lookup is more reliable
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 45000)
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: tool.id, input, address, txHash }),
+        body: JSON.stringify({ tool: tool.id, input, address, expectedAmount: tool.cost }),
         signal: controller.signal,
       })
       clearTimeout(timeout)
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `API error ${res.status} — please try again`)
+      if (!res.ok) throw new Error(data.error || `Error ${res.status} — please try again`)
       setResult(data)
       setRunState('done')
       setHistory(h => [{ tool: tool.name, input: input.slice(0,22)+'...', cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
