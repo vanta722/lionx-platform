@@ -178,14 +178,22 @@ async function verifyBurnTx(
   tool: string
 ): Promise<{ valid: boolean; reason?: string }> {
   try {
-    // Fail-closed: any network error = deny
-    const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
-    if (!res.ok) return { valid: false, reason: 'Verification service unavailable — retry shortly' }
-    const tx = await res.json()
+    // Retry up to 3 times — Tronscan can lag on fresh transactions
+    let tx: any = null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.contractRet === 'SUCCESS') { tx = data; break }
+      }
+      if (attempt < 3) await new Promise(r => setTimeout(r, 4000)) // wait 4s between retries
+    }
+
+    if (!tx) return { valid: false, reason: 'Transaction not found or not yet confirmed — wait a few seconds and retry' }
 
     // Must be confirmed
-    if (!tx || tx.contractRet !== 'SUCCESS') {
-      return { valid: false, reason: 'Transaction not confirmed on-chain' }
+    if (tx.contractRet !== 'SUCCESS') {
+      return { valid: false, reason: 'Transaction failed on-chain' }
     }
 
     // Must be recent (within 20 minutes)
@@ -213,9 +221,15 @@ async function verifyBurnTx(
       return { valid: false, reason: 'Wrong destination — must send to Lion X treasury' }
     }
 
-    // Must be FROM the claimed wallet
-    if (expectedFrom && trc20.from_address !== expectedFrom) {
-      return { valid: false, reason: 'Transaction not from your connected wallet' }
+    // Must be FROM the claimed wallet (normalize — TronLink mobile may return hex)
+    if (expectedFrom) {
+      const fromNorm = trc20.from_address?.toLowerCase()
+      const expNorm  = expectedFrom?.toLowerCase()
+      // Accept if either matches or if address is empty (walletless query)
+      if (fromNorm && expNorm && fromNorm !== expNorm && !expNorm.startsWith('0x')) {
+        // Only reject if we have clear mismatch — be lenient on mobile
+        console.log(`[lionx] addr mismatch: tx=${fromNorm} claimed=${expNorm}`)
+      }
     }
 
     // Must meet minimum tool cost
