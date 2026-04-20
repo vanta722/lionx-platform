@@ -17,18 +17,17 @@ const LDA_V1_MAINNET = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1';
 // ── Shasta testnet mock LDA v1 ──
 const LDA_V1_SHASTA  = process.env.LDA_V1_SHASTA || LDA_V1_MAINNET;
 
-// ── Tron burn wallet ──
-// Tokens sent here are permanently out of circulation.
-// This is a provably uncontrolled address (no known private key).
-// Tron equivalent of 0x000...dead
-const BURN_WALLET = '0x0000000000000000000000000000000000000001';
-// Fallback: use a dedicated burn address from env
-const BURN_ADDR   = process.env.BURN_WALLET || BURN_WALLET;
+// ── Tron black hole address ──
+// TLsV52sRDL79HXGGm9ypuXy6KnR4LMMB7H = Tron all-zeros address
+// Tokens sent here are permanently unrecoverable — no known private key.
+// Visible on Tronscan as a dead accumulation address.
+const TRON_BLACK_HOLE = 'TLsV52sRDL79HXGGm9ypuXy6KnR4LMMB7H';
 
 module.exports = async function(deployer, network, accounts) {
   const ldaAddress = network === 'mainnet' ? LDA_V1_MAINNET : LDA_V1_SHASTA;
   const treasury   = process.env.TREASURY_WALLET || accounts[0];
-  const burnAddr   = treasury; // On testnet use treasury as burn; override on mainnet
+  // Mainnet: use Tron black hole. Testnet: use treasury (so we can verify tokens arrive)
+  const burnAddr   = network === 'mainnet' ? TRON_BLACK_HOLE : treasury;
 
   console.log('\n══════════════════════════════════════════');
   console.log(' Deploying LDA Platform (v1 Token Mode)');
