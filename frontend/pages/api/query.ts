@@ -182,34 +182,38 @@ async function lookupAndVerify(
 ): Promise<{ valid: boolean; reason?: string; txHash?: string }> {
   try {
     const minCost = TOOL_COSTS[tool] || 25
-    const since   = Date.now() - 5 * 60 * 1000 // last 5 minutes
+    const since   = Date.now() - 3 * 60 * 1000 // last 3 minutes (fresh payments only)
 
     // Retry up to 4 times (Tronscan indexes new txs within ~10s)
     for (let attempt = 1; attempt <= 4; attempt++) {
       const res = await fetch(
-        `https://apilist.tronscanapi.com/api/contract/events?contract=${LDA_TOKEN}&toAddress=${TREASURY_ADDR}&limit=10`
+        `https://apilist.tronscanapi.com/api/contract/events?contract=${LDA_TOKEN}&toAddress=${TREASURY_ADDR}&limit=20`
       )
       if (!res.ok) { await new Promise(r => setTimeout(r, 3000)); continue }
       const data = await res.json()
       const events: any[] = data?.data || []
+      console.log(`[lionx] attempt ${attempt}: ${events.length} events found`)
 
       for (const evt of events) {
         const ts     = Number(evt.timestamp || 0)
         const amount = Number(evt.amount || 0) / 1_000_000
-        const from   = evt.transferFromAddress || evt.from_address || ''
+        const from   = (evt.transferFromAddress || evt.from_address || '').toLowerCase()
 
-        // Must be recent
-        if (ts < since) continue
+        // Must be recent (within 3 minutes)
+        if (ts < since) { console.log(`[lionx] skip: ts ${ts} < since ${since}`); continue }
         // Must be right amount
-        if (amount < minCost) continue
-        // Must be from this wallet (if wallet known)
-        if (fromWallet && from && from !== fromWallet) continue
+        if (amount < minCost) { console.log(`[lionx] skip: ${amount} LDA < ${minCost}`); continue }
+        // From wallet check (case-insensitive, skip if wallet not known)
+        if (fromWallet && from && from !== fromWallet.toLowerCase()) {
+          console.log(`[lionx] skip: from=${from} expected=${fromWallet.toLowerCase()}`)
+          continue
+        }
 
-        // Check replay — use the event hash as dedup key
-        const txHash = evt.transactionHash || evt.transaction_id || `${from}-${ts}`
-        if (isReplay(txHash)) continue
+        // Check replay
+        const txHash = evt.transactionHash || `${from}-${ts}`
+        if (isReplay(txHash)) { console.log(`[lionx] skip: replay ${txHash}`); continue }
 
-        console.log(`[lionx] ✅ verified: ${from} → ${amount} LDA for ${tool} hash=${txHash}`)
+        console.log(`[lionx] ✅ verified: ${from} → ${amount} LDA for ${tool}`)
         return { valid: true, txHash }
       }
 
