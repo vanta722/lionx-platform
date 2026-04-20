@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --teal: #14b8a6;
+  --teal-glow: rgba(20,184,166,0.35);
+  --gold: #f5a623;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: #050508; color: #dde8f0; font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(20,184,166,0.2); border-radius: 4px; }
+
+@keyframes breathe {
+  0%,100% { opacity:1; box-shadow: 0 0 8px var(--teal); }
+  50% { opacity:0.4; box-shadow: 0 0 3px var(--teal); }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.shimmer-border {
+  background: linear-gradient(90deg, var(--teal), var(--gold), var(--teal));
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+.glow-teal { box-shadow: 0 0 20px rgba(20,184,166,0.3); }
+.glow-gold { box-shadow: 0 0 20px rgba(245,166,35,0.3); }
