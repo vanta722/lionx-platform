@@ -89,9 +89,8 @@ contract LDAPlatform {
      * Backend listens for QueryExecuted events to serve AI responses.
      *
      * @param toolId   Registered tool identifier
-     * @param queryRef Off-chain query reference hash (for backend matching)
      */
-    function executeQuery(bytes32 toolId, bytes32 queryRef) external {
+    function executeQuery(bytes32 toolId, bytes32 /* queryRef */) external {
         Tool storage tool = tools[toolId];
         require(tool.active, "Tool not active");
 

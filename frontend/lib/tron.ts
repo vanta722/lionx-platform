@@ -13,9 +13,9 @@ declare global {
 // ── Contract Addresses (update after deployment) ──
 export const CONTRACTS = {
   LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1', // Original LDA
-  LDA_V2:    '',   // Set after deployment
-  MIGRATION: '',   // Set after deployment
-  PLATFORM:  '',   // Set after deployment
+  LDA_V2:    'TFHVBsB3svwQAiFn2D3652b1nn9JFELf3T', // Shasta testnet
+  MIGRATION: 'TSTsQq7mHQ5LZ7axk3J5mBvmwBKYzUYTXQ', // Shasta testnet
+  PLATFORM:  'TMsZ6yTCx9UU3VkfxjwvTT17Bf7B8kRWxW', // Shasta testnet
   STAKING:   '',   // Set after deployment
   MANES:     'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
 }

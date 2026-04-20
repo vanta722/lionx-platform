@@ -383,7 +383,7 @@ contract LDAv2 is ITRC20 {
      * @dev Cast a vote on an active snapshot.
      * Weight = current LDA v2 balance at time of vote.
      */
-    function vote(uint256 snapshotId, bool support) external whenNotPaused {
+    function castVote(uint256 snapshotId, bool support) external whenNotPaused {
         require(snapshots[snapshotId].active, "LDA: snapshot not active");
         require(!hasVoted[snapshotId][msg.sender], "LDA: already voted");
         uint256 weight = _balances[msg.sender];

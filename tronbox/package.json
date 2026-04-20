@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "description": "LDA v2 smart contracts for Lion X AI Platform",
   "scripts": {
-    "compile":          "tronbox compile",
-    "deploy:shasta":    "tronbox migrate --network shasta --reset",
-    "deploy:mainnet":   "tronbox migrate --network mainnet --reset",
-    "test":             "tronbox test",
-    "clean":            "rm -rf build/"
+    "compile": "tronbox compile",
+    "deploy:shasta": "tronbox migrate --network shasta --reset",
+    "deploy:mainnet": "tronbox migrate --network mainnet --reset",
+    "test": "tronbox test",
+    "clean": "rm -rf build/"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "tronweb": "^6.2.2"
   }
 }
