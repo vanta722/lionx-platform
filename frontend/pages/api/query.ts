@@ -125,10 +125,28 @@ Return a JSON object with exactly these fields:
 Return only the JSON.`,
 }
 
+// Replay protection: store used txHashes with 20-min TTL
+// In-memory store (survives within a single serverless instance lifetime)
+// For production scale, replace with Redis/Upstash
+const usedTxHashes = new Map<string, number>()
+const REPLAY_TTL_MS = 20 * 60 * 1000 // 20 minutes
+
+function isReplay(txHash: string): boolean {
+  const now = Date.now()
+  // Purge expired entries
+  for (const [hash, ts] of usedTxHashes.entries()) {
+    if (now - ts > REPLAY_TTL_MS) usedTxHashes.delete(hash)
+  }
+  if (usedTxHashes.has(txHash)) return true
+  usedTxHashes.set(txHash, now)
+  return false
+}
+
 // Verify a burn transaction actually happened on-chain
 async function verifyBurnTx(txHash: string, expectedAddress: string): Promise<{ valid: boolean; reason?: string }> {
   try {
     const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
+    if (!res.ok) return { valid: false, reason: 'Verification service unavailable — retry shortly' }
     const tx  = await res.json()
 
     if (!tx || tx.contractRet !== 'SUCCESS') return { valid: false, reason: 'Transaction not confirmed' }
@@ -145,10 +163,8 @@ async function verifyBurnTx(txHash: string, expectedAddress: string): Promise<{ 
 
     return { valid: true }
   } catch {
-    // If Tronscan is down, allow the request (fail-open for UX)
-    // TODO: switch to fail-closed once Tronscan reliability is confirmed
-    console.warn('Tronscan verification failed — allowing request')
-    return { valid: true }
+    // Fail-closed — never grant free access if verification is unavailable
+    return { valid: false, reason: 'Verification service unavailable — retry shortly' }
   }
 }
 
@@ -160,6 +176,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Require proof-of-burn: txHash from the on-chain executeQuery() call
   if (!txHash) return res.status(403).json({ error: 'Missing txHash — execute query on-chain first' })
+
+  // Replay protection — each txHash can only be used once
+  if (isReplay(txHash)) return res.status(403).json({ error: 'Transaction already used — each burn grants one query' })
 
   const verification = await verifyBurnTx(txHash, address)
   if (!verification.valid) return res.status(403).json({ error: `Transaction invalid: ${verification.reason}` })

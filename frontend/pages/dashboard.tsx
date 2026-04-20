@@ -7,7 +7,7 @@ import Link from 'next/link'
 // ── Contract addresses ──────────────────────────────────────────
 const LDA_V2_ADDR   = process.env.NEXT_PUBLIC_LDA_V2    || ''
 const MIGRATION_ADDR = process.env.NEXT_PUBLIC_MIGRATION || ''
-const TREASURY_ADDR  = process.env.NEXT_PUBLIC_LDA_V1   || '' // treasury wallet
+const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || '' // treasury wallet (set NEXT_PUBLIC_TREASURY in env)
 const OLD_LDA_SUPPLY = 20_207_717 // real old LDA max supply
 const MAX_V2_SUPPLY  = 10_000_000 // hard cap
 const MIGRATION_RATIO = 2          // 2 old LDA → 1 LDA v2

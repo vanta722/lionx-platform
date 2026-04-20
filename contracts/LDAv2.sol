@@ -478,7 +478,9 @@ contract LDAv2 is ITRC20 {
     }
 
     function remainingMintable() external view returns (uint256) {
-        return MAX_SUPPLY - _totalSupply - totalBurned;
+        // _totalSupply already reflects burned tokens (burn reduces supply)
+        // Do NOT subtract totalBurned again — that double-counts
+        return MAX_SUPPLY - _totalSupply;
     }
 
     // ─── Internal Helpers ──────────────────────────────────────

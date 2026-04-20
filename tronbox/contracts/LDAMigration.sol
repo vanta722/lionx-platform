@@ -83,10 +83,16 @@ contract LDAMigration {
             "Migration: v1 transfer failed - approve this contract first"
         );
 
+        // Safety check: ensure contract has enough v2 tokens before transfer
+        require(
+            newLDA.balanceOf(address(this)) >= v2Amount,
+            "Migration: insufficient v2 supply in contract"
+        );
+
         // Transfer pre-minted LDA v2 to user (migration contract holds supply)
         require(
             newLDA.transfer(msg.sender, v2Amount),
-            "Migration: v2 transfer failed — migration contract needs tokens"
+            "Migration: v2 transfer failed"
         );
 
         migratedBy[msg.sender] += amount;
