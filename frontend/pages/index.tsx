@@ -93,49 +93,49 @@ export default function Home() {
     return () => clearInterval(t)
   }, [])
 
-  // Fetch real burned supply + animate counter
-  const LDA_ADDR = process.env.NEXT_PUBLIC_PLATFORM || 'TQMc3D4Q6WAZmDuDj5ySZ4dMNKd87rgVPD'
+  // Fetch live LDA token stats from Tronscan
+  const LDA_TOKEN = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1' // LDA mainnet
+  const [holders, setHolders] = useState(281)
+
   useEffect(() => {
-    async function fetchBurned() {
+    async function fetchTokenStats() {
       try {
-        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_ADDR}`)
+        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_TOKEN}`)
         const data = await res.json()
         const token = data?.trc20_tokens?.[0]
         if (token) {
-          const issued  = Number(token.total_supply_with_decimals || 0) / 1e6
-          const burned  = Math.max(0, 10_000_000 - issued)
-          setTotalBurned(burned)
+          setHolders(Number(token.holder_count || 281))
+          // Track burned = tokens sent to black hole address from platform
+          // For now show 0 until platform goes live on mainnet
+          setTotalBurned(0)
         }
       } catch { /* silent */ }
     }
-    fetchBurned()
-    const t = setInterval(fetchBurned, 30000)
+    fetchTokenStats()
+    const t = setInterval(fetchTokenStats, 30000)
     return () => clearInterval(t)
-  }, [LDA_ADDR])
+  }, [])
 
-  // Animate counter up
+  // Animate burn counter
   useEffect(() => {
     if (totalBurned === 0) return
-    let start = displayBurned
     const end = totalBurned
     const duration = 1500
     const startTime = performance.now()
     const step = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplayBurned(Math.floor(start + (end - start) * eased))
+      setDisplayBurned(Math.floor(end * eased))
       if (progress < 1) requestAnimationFrame(step)
     }
     requestAnimationFrame(step)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalBurned])
 
   const stats = [
-    { val: '20,207,717', label: 'Old LDA Supply' },
-    { val: '10,000,000', label: 'LDA Max Supply' },
-    { val: '281',        label: 'Existing Holders' },
-    { val: displayBurned > 0 ? displayBurned.toLocaleString() : '0', label: 'Tokens Burned', live: true, fire: true },
-    { val: countdown, label: 'Platform Launch', live: true },
+    { val: '20,207,717',                                               label: 'LDA Total Supply'  },
+    { val: holders.toLocaleString(),                                   label: 'LDA Holders', live: true },
+    { val: displayBurned > 0 ? displayBurned.toLocaleString() : '0',  label: 'Tokens Burned', fire: true },
+    { val: '70%',                                                      label: 'Burn Per Query'    },
   ]
 
   const tools = [

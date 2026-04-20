@@ -8,8 +8,8 @@ import Link from 'next/link'
 const LDA_ADDR   = process.env.NEXT_PUBLIC_PLATFORM    || ''
 const MIGRATION_ADDR = process.env.NEXT_PUBLIC_MIGRATION || ''
 const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || '' // treasury wallet (set NEXT_PUBLIC_TREASURY in env)
-const OLD_LDA_SUPPLY = 20_207_717 // real old LDA max supply
-const MAX_SUPPLY  = 10_000_000 // hard cap
+const LDA_SUPPLY = 20_207_717 // LDA total supply
+// LDA supply is fixed — no new tokens minted
 const BURN_PERCENT = 70          // 2 old LDA → 1 LDA
 
 interface LiveStats {
@@ -37,7 +37,7 @@ interface LiveStats {
 const DEFAULT_STATS: LiveStats = {
   platformActive: true, timeRemaining: 30 * 86400,
   totalSpent: 0, totalBurned: 0,
-  circulatingSupply: OLD_LDA_SUPPLY, remainingSupply: MAX_SUPPLY,
+  circulatingSupply: LDA_SUPPLY, remainingSupply: LDA_SUPPLY,
   totalSupply: 0, burnedSupply: 0, circulating: 0,
   treasuryBalance: 0, holders: 281, burnRate24h: 0,
   burnedPct: 0, burnPct: 0, supplyCreatedPct: 0,
@@ -144,17 +144,17 @@ export default function Dashboard() {
         timeRemaining,
         totalSpent:   totalSpentAmt,
         totalBurned,
-        circulatingSupply:  OLD_LDA_SUPPLY - totalSpentAmt,
-        remainingSupply:  OLD_LDA_SUPPLY,
+        circulatingSupply:  LDA_SUPPLY - totalSpentAmt,
+        remainingSupply:  LDA_SUPPLY,
         totalSupply:    ldaSupply,
         burnedSupply:    ldaBurned,
         circulating,
         treasuryBalance:  treasuryBal,
         holders:          Number(holders),
         burnRate24h:      ldaBurned,  // cumulative for now
-        burnedPct:     (totalSpentAmt / OLD_LDA_SUPPLY) * 100,
+        burnedPct:     (totalSpentAmt / LDA_SUPPLY) * 100,
         burnPct:          totalBurned > 0 ? (ldaBurned / totalBurned) * 100 : 0,
-        supplyCreatedPct: (totalBurned / MAX_SUPPLY) * 100,
+        supplyCreatedPct: (totalBurned / LDA_SUPPLY) * 100,
       }
 
       setStats(s)
@@ -272,7 +272,7 @@ export default function Dashboard() {
                     Platform {stats.platformActive ? 'ACTIVE' : 'PAUSED'}
                   </span>
                 </div>
-                <div className="font-black text-xl mb-1">Swap Old LDA → LDA · 2:1 Ratio</div>
+                <div className="font-black text-xl mb-1">🔥 LDA Burn Platform — Live Stats</div>
                 <div className="text-sm" style={{ color: '#7a8a9a' }}>
                   Every query burns LDA permanently. 70% destroyed, 30% to treasury.
                 </div>
@@ -289,7 +289,7 @@ export default function Dashboard() {
             {/* Burn progress bar */}
             <div className="mt-5">
               <div className="flex justify-between text-xs mb-2" style={{ color: '#7a8a9a' }}>
-                <span>Total LDA Burned: <strong style={{color:'#f5a623'}}>{fmtNum(stats.totalSpent)} / {fmtNum(OLD_LDA_SUPPLY)}</strong></span>
+                <span>Total LDA Burned: <strong style={{color:'#f5a623'}}>{fmtNum(stats.totalSpent)} / {fmtNum(LDA_SUPPLY)}</strong></span>
                 <span>{stats.burnedPct ? stats.burnedPct.toFixed(2) + '% burned' : '0% burned'}</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: '#0c0c18' }}>
@@ -298,7 +298,7 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-between text-xs mt-1.5">
                 <span style={{ color: '#4a5a6a' }}>LDA Created: {fmtNum(stats.totalBurned)}</span>
-                <span style={{ color: '#4a5a6a' }}>Hard Cap: {fmtNum(MAX_SUPPLY)}</span>
+                <span style={{ color: '#4a5a6a' }}>Hard Cap: {fmtNum(LDA_SUPPLY)}</span>
               </div>
             </div>
           </div>
@@ -308,7 +308,7 @@ export default function Dashboard() {
             <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#4a5a6a' }}>Supply Chain</div>
             <div className="flex items-center justify-between flex-wrap gap-3">
               {[
-                { label: 'Old LDA Total',    val: fmtNum(OLD_LDA_SUPPLY),      sub: 'Original supply',           color: '#7a8a9a',  icon: '🦁' },
+                { label: 'LDA Total Supply',    val: fmtNum(LDA_SUPPLY),      sub: 'LDA on Tron',           color: '#7a8a9a',  icon: '🦁' },
                 null,
                 { label: 'LDA Created',   val: fmtNum(stats.totalBurned),      sub: `via ${fmtNum(stats.totalSpent)} old LDA`, color: '#f5a623', icon: '🔄' },
                 null,
@@ -333,7 +333,7 @@ export default function Dashboard() {
           {/* ── KEY STATS GRID ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
-              { icon:'💎', label:'Max Hard Cap',       val: fmtNum(MAX_SUPPLY),           sub:'LDA total possible',          color:'#14b8a6' },
+              { icon:'💎', label:'Total Supply',       val: fmtNum(LDA_SUPPLY),           sub:'Fixed supply — no inflation',          color:'#14b8a6' },
               { icon:'🔄', label:'Supply Burned',  val: `${stats.supplyCreatedPct.toFixed(2)}%`, sub:`${fmtNum(stats.totalBurned)} of 10M`,  color:'#f5a623' },
               { icon:'🔥', label:'Total Burned',       val: fmtNum(stats.burnedSupply),     sub:`${stats.burnPct.toFixed(2)}% of issued`,  color:'#ef4444' },
               { icon:'🏦', label:'Treasury Balance',   val: fmtNum(stats.treasuryBalance),   sub:'30% of all burns',               color:'#a78bfa' },
@@ -353,7 +353,7 @@ export default function Dashboard() {
               { icon:'👥', label:'LDA Holders',     val: fmtNum(stats.holders),           sub:'Unique wallets',                 color:'#14b8a6' },
               { icon:'📊', label:'LDA Circulating',  val: fmtNum(stats.circulatingSupply),   sub:'LDA in circulation',               color:'#7a8a9a' },
               { icon:'⏳', label:'Remaining Supply',val: fmtNum(stats.remainingSupply),  sub:'Remaining hard cap',      color:'#f5a623' },
-              { icon:'⚡', label:'Burn Split',    val: '2 : 1',                         sub:'Old LDA → LDA',               color:'#14b8a6' },
+              { icon:'⚡', label:'Burn Rate',    val: '70%',                         sub:'70% burn / 30% treasury',               color:'#14b8a6' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
                 <div className="text-2xl mb-2">{s.icon}</div>
