@@ -10,7 +10,7 @@ const TOOLS = [
   { id: 'MARKET_INTEL',     icon: '📊', name: 'Market Intelligence', shortName: 'Market',   desc: 'AI-powered token sentiment, holder trends and market signals',     cost: 25,  inputLabel: 'Token Name or Address', placeholder: 'e.g. MANES or contract...' },
 ]
 
-type RunState = 'idle' | 'approving' | 'running' | 'done' | 'error'
+type RunState = 'idle' | 'sending' | 'running' | 'done' | 'error'
 
 export default function Tools() {
   const { address, balance, connected, connect } = useWallet()
@@ -40,8 +40,8 @@ export default function Tools() {
   }, [history])
 
   const tool     = TOOLS[activeTool]
-  const PLATFORM = process.env.NEXT_PUBLIC_PLATFORM || ''
-  const LDA_V1   = process.env.NEXT_PUBLIC_LDA_V1   || 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+  const TREASURY = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
+  const LDA_V1   = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 
   function shareReport() {
     if (!result || result.error) return
@@ -65,24 +65,23 @@ export default function Tools() {
 
   async function runQuery() {
     if (!connected || !input.trim()) return
-    setRunState('approving')
+    setRunState('sending')
     setResult(null)
     try {
       const tw = (window as any).tronWeb
       if (!tw) throw new Error('TronLink not connected')
-      const lda = await tw.contract().at(LDA_V1)
-      await lda.approve(PLATFORM, (tool.cost * 1e6 * 10).toString()).send({ feeLimit: 100_000_000 })
-      await new Promise(r => setTimeout(r, 4000))
+
+      // Direct LDA transfer to treasury — no smart contract needed
+      // User sends exact tool cost in LDA, API verifies on Tronscan, returns AI result
+      const lda      = await tw.contract().at(LDA_V1)
+      const amount   = (tool.cost * 1_000_000).toString() // LDA has 6 decimals
       setRunState('running')
-      const plat     = await tw.contract().at(PLATFORM)
-      // Use keccak256 to match how Platform contract registered the tool
-      const toolId   = tw.sha3(tool.id)
-      const queryRef = tw.sha3(input + Date.now())
-      const txHash   = await plat.executeQuery(toolId, queryRef).send({ feeLimit: 300_000_000 })
+      const txHash   = await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
       await new Promise(r => setTimeout(r, 5000)) // Wait for block confirmation
+
       const res  = await fetch('/api/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: tool.id, input, address, txHash })
+        body: JSON.stringify({ tool: tool.id, input, address, txHash, expectedAmount: tool.cost })
       })
       const data = await res.json()
       setResult(data)
@@ -178,7 +177,7 @@ export default function Tools() {
                 ) : (
                   <button disabled className="w-full py-3.5 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2" style={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6', border:'none', fontFamily:'inherit' }}>
                     <span className="w-3.5 h-3.5 rounded-full border-2 border-transparent" style={{ borderTopColor: '#14b8a6', animation: 'spin 0.7s linear infinite' }}/>
-                    {runState === 'approving' ? 'Approving...' : 'Analyzing...'}
+                    {runState === 'sending' ? 'Sending LDA...' : 'Analyzing...'}
                   </button>
                 )}
               </div>
@@ -193,14 +192,14 @@ export default function Tools() {
                         {copied ? '✅ Copied!' : '🔗 Share'}
                       </button>
                     )}
-                    <span className="text-xs font-bold px-2.5 py-1 rounded" style={{ background: runState==='done'?'rgba(34,197,94,0.1)':runState==='running'||runState==='approving'?'rgba(245,166,35,0.1)':'rgba(20,184,166,0.1)', color: runState==='done'?'#22c55e':runState==='running'||runState==='approving'?'#f5a623':'#14b8a6', border:`1px solid ${runState==='done'?'rgba(34,197,94,0.2)':'rgba(20,184,166,0.2)'}` }}>
-                      {runState==='done'?'Complete':runState==='running'?'Analyzing...':runState==='approving'?'Approving...':'Ready'}
+                    <span className="text-xs font-bold px-2.5 py-1 rounded" style={{ background: runState==='done'?'rgba(34,197,94,0.1)':runState==='running'||runState==='sending'?'rgba(245,166,35,0.1)':'rgba(20,184,166,0.1)', color: runState==='done'?'#22c55e':runState==='running'||runState==='sending'?'#f5a623':'#14b8a6', border:`1px solid ${runState==='done'?'rgba(34,197,94,0.2)':'rgba(20,184,166,0.2)'}` }}>
+                      {runState==='done'?'Complete':runState==='running'?'Analyzing...':runState==='sending'?'Sending LDA...':'Ready'}
                     </span>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
                   {runState === 'idle' && <div className="h-full flex flex-col items-center justify-center gap-3" style={{ color: '#4a5a6a' }}><span className="text-5xl opacity-30">{tool.icon}</span><p className="text-sm">Enter an address and run analysis</p></div>}
-                  {(runState === 'approving' || runState === 'running') && (
+                  {(runState === 'sending' || runState === 'running') && (
                     <div className="p-4 rounded-xl font-mono text-xs" style={{ background: '#020208', border: '1px solid rgba(20,184,166,0.15)' }}>
                       {['▶ Connecting to Tron node...', runState==='running'?'▶ Verifying LDA burn... confirmed':'▶ Waiting for approval...', runState==='running'?'▶ Fetching on-chain data...':'', runState==='running'?'▶ Running AI analysis model...':''].filter(Boolean).map((l,i) => (
                         <div key={i} className="py-0.5" style={{ color: i===0?'#14b8a6':i===1?'#22c55e':'#7a8a9a' }}>{l}</div>
@@ -286,12 +285,12 @@ export default function Tools() {
           ) : (
             <button disabled className="w-full py-4 rounded-xl font-extrabold text-base mb-4 flex items-center justify-center gap-3" style={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6', border:'none', fontFamily:'inherit' }}>
               <span className="w-4 h-4 rounded-full border-2 border-transparent" style={{ borderTopColor: '#14b8a6', animation: 'spin 0.7s linear infinite' }}/>
-              {runState === 'approving' ? 'Approving spend...' : 'Running AI analysis...'}
+              {runState === 'sending' ? 'Sending LDA to treasury...' : 'Running AI analysis...'}
             </button>
           )}
 
           {/* Output */}
-          {(runState === 'running' || runState === 'approving') && (
+          {(runState === 'running' || runState === 'sending') && (
             <div className="p-4 rounded-xl font-mono text-xs mb-4" style={{ background: '#020208', border: '1px solid rgba(20,184,166,0.15)' }}>
               {['▶ Connecting to Tron node...', runState==='running'?'▶ Burn verified... confirmed':'▶ Awaiting approval...', runState==='running'?'▶ Fetching on-chain data...':'', runState==='running'?'▶ Running AI analysis...':''].filter(Boolean).map((l,i) => (
                 <div key={i} className="py-0.5" style={{ color: i===0?'#14b8a6':i===1?'#22c55e':'#7a8a9a' }}>{l}</div>

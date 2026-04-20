@@ -159,28 +159,75 @@ function isReplay(txHash: string): boolean {
   return false
 }
 
-// Verify a burn transaction actually happened on-chain
-async function verifyBurnTx(txHash: string, expectedAddress: string): Promise<{ valid: boolean; reason?: string }> {
+// LDA token contract and treasury receiving address
+const LDA_TOKEN    = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+const TREASURY_ADDR = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
+
+// Tool minimum costs (LDA) — must match frontend TOOLS array
+const TOOL_COSTS: Record<string, number> = {
+  WALLET_ANALYZER:  50,
+  CONTRACT_AUDITOR: 100,
+  MARKET_INTEL:     25,
+}
+
+// Verify a direct LDA transfer to treasury happened on-chain
+// No smart contract needed — just a TRC-20 transfer
+async function verifyBurnTx(
+  txHash: string,
+  expectedFrom: string,
+  tool: string
+): Promise<{ valid: boolean; reason?: string }> {
   try {
+    // Fail-closed: any network error = deny
     const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
     if (!res.ok) return { valid: false, reason: 'Verification service unavailable — retry shortly' }
-    const tx  = await res.json()
+    const tx = await res.json()
 
-    if (!tx || tx.contractRet !== 'SUCCESS') return { valid: false, reason: 'Transaction not confirmed' }
+    // Must be confirmed
+    if (!tx || tx.contractRet !== 'SUCCESS') {
+      return { valid: false, reason: 'Transaction not confirmed on-chain' }
+    }
 
-    // Must be recent (within 15 minutes)
+    // Must be recent (within 20 minutes)
     const txAge = Date.now() - tx.timestamp
-    if (txAge > 15 * 60 * 1000) return { valid: false, reason: 'Transaction too old (max 15 min)' }
+    if (txAge > 20 * 60 * 1000) {
+      return { valid: false, reason: 'Transaction too old — must be within 20 minutes' }
+    }
 
-    // Must be from the claimed address
-    const fromAddr = tx.ownerAddress || tx.contract_map?.[0]?.from
-    if (fromAddr && expectedAddress && fromAddr.toLowerCase() !== expectedAddress.toLowerCase()) {
-      return { valid: false, reason: 'Transaction not from claimed address' }
+    // Must be a TRC-20 token transfer (contractType 31)
+    if (tx.contractType !== 31) {
+      return { valid: false, reason: 'Not a TRC-20 transfer' }
+    }
+
+    // Extract transfer details from trc20TransferInfo
+    const trc20 = tx.trc20TransferInfo?.[0]
+    if (!trc20) return { valid: false, reason: 'No TRC-20 transfer data found' }
+
+    // Must be LDA token
+    if (trc20.contract_address !== LDA_TOKEN) {
+      return { valid: false, reason: 'Wrong token — must send LDA' }
+    }
+
+    // Must be sent TO treasury wallet
+    if (trc20.to_address !== TREASURY_ADDR) {
+      return { valid: false, reason: 'Wrong destination — must send to Lion X treasury' }
+    }
+
+    // Must be FROM the claimed wallet
+    if (expectedFrom && trc20.from_address !== expectedFrom) {
+      return { valid: false, reason: 'Transaction not from your connected wallet' }
+    }
+
+    // Must meet minimum tool cost
+    const minCost = TOOL_COSTS[tool] || 25
+    const amountLDA = Number(trc20.amount_str || trc20.amount || '0') / 1_000_000
+    if (amountLDA < minCost) {
+      return { valid: false, reason: `Insufficient payment — need ${minCost} LDA, got ${amountLDA.toFixed(2)}` }
     }
 
     return { valid: true }
   } catch {
-    // Fail-closed — never grant free access if verification is unavailable
+    // Fail-closed — never grant free access if verification fails
     return { valid: false, reason: 'Verification service unavailable — retry shortly' }
   }
 }
@@ -204,7 +251,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Replay protection — each txHash can only be used once
   if (isReplay(txHash)) return res.status(403).json({ error: 'Transaction already used — each burn grants one query' })
 
-  const verification = await verifyBurnTx(txHash, address)
+  const verification = await verifyBurnTx(txHash, address, tool)
   if (!verification.valid) return res.status(403).json({ error: `Transaction invalid: ${verification.reason}` })
 
   const promptFn = TOOL_PROMPTS[tool]
