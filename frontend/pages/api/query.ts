@@ -134,9 +134,9 @@ const REPLAY_TTL_MS = 20 * 60 * 1000 // 20 minutes
 function isReplay(txHash: string): boolean {
   const now = Date.now()
   // Purge expired entries
-  for (const [hash, ts] of usedTxHashes.entries()) {
+  Array.from(usedTxHashes.entries()).forEach(([hash, ts]) => {
     if (now - ts > REPLAY_TTL_MS) usedTxHashes.delete(hash)
-  }
+  })
   if (usedTxHashes.has(txHash)) return true
   usedTxHashes.set(txHash, now)
   return false

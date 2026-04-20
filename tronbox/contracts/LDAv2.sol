@@ -103,9 +103,17 @@ contract LDAv2 is ITRC20 {
         string  description;
         bool    active;
     }
+
+    // Balance checkpoint for governance (Compound-style)
+    // Each entry records the balance after a change at a specific block.
+    struct Checkpoint {
+        uint256 fromBlock;
+        uint256 balance;
+    }
+
     uint256 public snapshotCount;
     mapping(uint256 => Snapshot) public snapshots;
-    mapping(uint256 => mapping(address => uint256)) private _snapshotBalances;
+    mapping(address => Checkpoint[]) private _checkpoints; // replaces _snapshotBalances
     mapping(uint256 => mapping(address => bool)) public hasVoted;
     mapping(uint256 => uint256) public votesFor;
     mapping(uint256 => uint256) public votesAgainst;
@@ -213,8 +221,9 @@ contract LDAv2 is ITRC20 {
     function mint(address to, uint256 amount) external onlyOwner {
         require(to != address(0), "LDA: mint to zero");
         require(_totalSupply + amount <= MAX_SUPPLY, "LDA: exceeds hard cap");
-        _totalSupply += amount;
-        _balances[to] += amount;
+        _totalSupply    += amount;
+        _balances[to]   += amount;
+        _writeCheckpoint(to, _balances[to]);
         emit Transfer(address(0), to, amount);
     }
 
@@ -257,6 +266,7 @@ contract LDAv2 is ITRC20 {
         _balances[from]  -= burnAmount;
         _totalSupply     -= burnAmount;
         totalBurned      += burnAmount;
+        _writeCheckpoint(from, _balances[from]);
         emit Transfer(from, address(0), burnAmount);
 
         // Treasury split — check for builder share
@@ -381,19 +391,89 @@ contract LDAv2 is ITRC20 {
 
     /**
      * @dev Cast a vote on an active snapshot.
-     * Weight = current LDA v2 balance at time of vote.
+     * Weight = balance AT the snapshot block (not current balance).
+     * Prevents vote manipulation by buying tokens after snapshot creation.
      */
-    function castVote(uint256 snapshotId, bool support) external whenNotPaused {
-        require(snapshots[snapshotId].active, "LDA: snapshot not active");
+    function vote(uint256 snapshotId, bool support) external whenNotPaused {
+        Snapshot storage s = snapshots[snapshotId];
+        require(s.active, "LDA: snapshot not active");
         require(!hasVoted[snapshotId][msg.sender], "LDA: already voted");
-        uint256 weight = _balances[msg.sender];
-        require(weight > 0, "LDA: no voting power");
+
+        // Use balance at snapshot block — checkpointed at every transfer
+        uint256 weight = _getPriorBalance(msg.sender, s.blockNumber);
+        require(weight > 0, "LDA: no voting power at snapshot block");
 
         hasVoted[snapshotId][msg.sender] = true;
         if (support) { votesFor[snapshotId]     += weight; }
         else          { votesAgainst[snapshotId] += weight; }
 
         emit VoteCast(snapshotId, msg.sender, support, weight);
+    }
+
+    /**
+     * @dev Returns the balance of `account` at a past block number.
+     * Uses binary search over stored checkpoints. O(log n).
+     * @param account  The address to query
+     * @param blockNumber  Must be a finalized block (< current block)
+     */
+    function _getPriorBalance(address account, uint256 blockNumber)
+        internal view returns (uint256)
+    {
+        Checkpoint[] storage ckpts = _checkpoints[account];
+        uint256 len = ckpts.length;
+        if (len == 0) return 0;
+
+        // Shortcut: most recent checkpoint is before or at blockNumber
+        if (ckpts[len - 1].fromBlock <= blockNumber) {
+            return ckpts[len - 1].balance;
+        }
+        // No checkpoint before blockNumber
+        if (ckpts[0].fromBlock > blockNumber) return 0;
+
+        // Binary search
+        uint256 lower = 0;
+        uint256 upper = len - 1;
+        while (upper > lower) {
+            uint256 center = upper - (upper - lower) / 2;
+            Checkpoint memory cp = ckpts[center];
+            if (cp.fromBlock == blockNumber) {
+                return cp.balance;
+            } else if (cp.fromBlock < blockNumber) {
+                lower = center;
+            } else {
+                upper = center - 1;
+            }
+        }
+        return ckpts[lower].balance;
+    }
+
+    /**
+     * @dev Public wrapper for UI/frontend to query historical balances.
+     */
+    function getPriorBalance(address account, uint256 blockNumber)
+        external view returns (uint256)
+    {
+        require(blockNumber < block.number, "LDA: block not yet mined");
+        return _getPriorBalance(account, blockNumber);
+    }
+
+    /**
+     * @dev Write or update a balance checkpoint for `account`.
+     * If the last checkpoint is from the same block, updates in place (gas efficient).
+     * Called after every balance change: transfer, mint, burn.
+     */
+    function _writeCheckpoint(address account, uint256 newBalance) internal {
+        Checkpoint[] storage ckpts = _checkpoints[account];
+        uint256 pos = ckpts.length;
+        if (pos > 0 && ckpts[pos - 1].fromBlock == block.number) {
+            // Same block — update in place instead of pushing a new entry
+            ckpts[pos - 1].balance = newBalance;
+        } else {
+            ckpts.push(Checkpoint({
+                fromBlock: block.number,
+                balance:   newBalance
+            }));
+        }
     }
 
     function getVoteResults(uint256 snapshotId) external view returns (
@@ -478,7 +558,9 @@ contract LDAv2 is ITRC20 {
     }
 
     function remainingMintable() external view returns (uint256) {
-        return MAX_SUPPLY - _totalSupply - totalBurned;
+        // _totalSupply already reflects burned tokens (burn reduces supply)
+        // Do NOT subtract totalBurned again — that double-counts
+        return MAX_SUPPLY - _totalSupply;
     }
 
     // ─── Internal Helpers ──────────────────────────────────────
@@ -489,6 +571,8 @@ contract LDAv2 is ITRC20 {
         require(_balances[from] >= amount, "LDA: insufficient balance");
         _balances[from] -= amount;
         _balances[to]   += amount;
+        _writeCheckpoint(from, _balances[from]);
+        _writeCheckpoint(to,   _balances[to]);
         emit Transfer(from, to, amount);
     }
 
