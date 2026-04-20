@@ -10,10 +10,10 @@ export default function Navbar() {
   const router = useRouter()
 
   const nav = [
-    { href: '/',         label: 'Home'      },
-    { href: '/tools',    label: 'AI Tools'  },
-    { href: '/migrate',  label: 'Migrate'   },
-    { href: '/stake',    label: 'Stake'     },
+    { href: '/',             label: 'Home'        },
+    { href: '/tools',        label: 'AI Tools'    },
+    { href: '/marketplace',  label: 'Marketplace' },
+    { href: '/migrate',      label: 'Migrate'     },
   ]
 
   return (
