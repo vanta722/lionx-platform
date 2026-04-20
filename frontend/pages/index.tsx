@@ -6,7 +6,7 @@ import LionHero from '../components/LionHero'
 
 const PHRASES = [
   'wallet analysis, contract audits & market intelligence.',
-  'on-chain insights powered by LDA v2.',
+  'on-chain insights powered by LDA.',
   'the AI layer Tron has been waiting for.'
 ]
 
@@ -132,7 +132,7 @@ export default function Home() {
 
   const stats = [
     { val: '20,207,717', label: 'Old LDA Supply' },
-    { val: '10,000,000', label: 'LDA v2 Max Supply' },
+    { val: '10,000,000', label: 'LDA Max Supply' },
     { val: '281',        label: 'Existing Holders' },
     { val: displayBurned > 0 ? displayBurned.toLocaleString() : '0', label: 'Tokens Burned', live: true, fire: true },
     { val: countdown,    label: 'Migration Window', live: true },
@@ -148,7 +148,7 @@ export default function Home() {
     <>
       <Head>
         <title>Lion X — AI Platform on Tron</title>
-        <meta name="description" content="Token-gated AI tools for crypto. Burn LDA v2 to access wallet analysis, contract audits and market intelligence on Tron."/>
+        <meta name="description" content="Token-gated AI tools for crypto. Burn LDA to access wallet analysis, contract audits and market intelligence on Tron."/>
       </Head>
 
       {/* Background particles — desktop only */}
@@ -207,10 +207,10 @@ export default function Home() {
           </div>
 
           <div className="flex gap-3 justify-center flex-wrap">
-            <Link href="/migrate"
+            <Link href="/tools"
               className="px-8 py-3.5 rounded-xl font-extrabold text-base no-underline transition-all"
               style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 4px 20px rgba(245,166,35,0.25)' }}>
-              🔄 Migrate to LDA v2
+              ⚡ Get Started
             </Link>
             <Link href="/tools"
               className="px-8 py-3.5 rounded-xl font-bold text-base no-underline transition-all"
@@ -244,8 +244,8 @@ export default function Home() {
       {/* TOOLS PREVIEW */}
       <section className="relative z-10 py-24 px-4 max-w-5xl mx-auto text-center">
         <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#14b8a6' }}>AI Tools</p>
-        <h2 className="font-black mb-3 tracking-tight" style={{ fontSize: 'clamp(28px,4vw,46px)', letterSpacing: -1.5 }}>What LDA v2 Unlocks</h2>
-        <p className="text-sm mb-14 max-w-md mx-auto" style={{ color: '#7a8a9a', lineHeight: 1.75 }}>Three AI tools at launch. Burn LDA v2 to run a query. Every burn reduces supply.</p>
+        <h2 className="font-black mb-3 tracking-tight" style={{ fontSize: 'clamp(28px,4vw,46px)', letterSpacing: -1.5 }}>What LDA Unlocks</h2>
+        <p className="text-sm mb-14 max-w-md mx-auto" style={{ color: '#7a8a9a', lineHeight: 1.75 }}>Three AI tools at launch. Burn LDA to run a query. Every burn reduces supply.</p>
 
         <div className="grid md:grid-cols-3 gap-5">
           {tools.map((t, i) => (
@@ -260,7 +260,7 @@ export default function Home() {
               <div className="text-sm mb-5" style={{ color: '#7a8a9a', lineHeight: 1.65 }}>{t.desc}</div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg"
                 style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: '#f5a623' }}>
-                🔥 {t.cost} LDA v2 per query
+                🔥 {t.cost} LDA per query
               </div>
               <span className="absolute top-4 right-4 text-xs font-bold px-2 py-1 rounded"
                 style={{ background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.2)', color: '#14b8a6' }}>
@@ -286,10 +286,10 @@ export default function Home() {
           <span style={{ background: 'linear-gradient(135deg,#f5a623,#ff9a00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Old Version.</span>
         </h2>
         <p className="text-base mb-10 relative" style={{ color: '#7a8a9a' }}>Migration window is live. Upgrade your position before it closes.</p>
-        <Link href="/migrate"
+        <Link href="/tools"
           className="relative inline-block px-10 py-4 rounded-xl font-extrabold text-base no-underline"
           style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 6px 28px rgba(245,166,35,0.35)' }}>
-          🔄 Migrate to LDA v2 Now
+          ⚡ Start Using AI Tools
         </Link>
       </section>
 

@@ -88,16 +88,16 @@ export default function Marketplace() {
             <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#14b8a6' }}>Agent Marketplace</p>
             <h1 className="font-black mb-4 tracking-tight" style={{ fontSize: 'clamp(32px,5vw,56px)', letterSpacing: -2 }}>
               AI Tools Powered by{' '}
-              <span style={{ background: 'linear-gradient(135deg,#f5a623,#ff9a00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>LDA v2</span>
+              <span style={{ background: 'linear-gradient(135deg,#f5a623,#ff9a00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>LDA</span>
             </h1>
             <p className="text-sm mb-8 max-w-lg mx-auto" style={{ color: '#7a8a9a', lineHeight: 1.8 }}>
-              Browse AI agents built on the Lion X platform. Run any tool by burning LDA v2.
+              Browse AI agents built on the Lion X platform. Run any tool by burning LDA.
               Builders earn a share of every query their tool processes.
             </p>
 
             {/* Stats */}
             <div className="flex justify-center gap-8 flex-wrap mb-8">
-              {[['🔧', liveCount, 'Live Tools'],['🔮', builderSlots, 'Builder Slots'],['🔥', 'LDA v2', 'Powered By'],['💰', '70%', 'Burned Per Query']].map(([icon,val,label]) => (
+              {[['🔧', liveCount, 'Live Tools'],['🔮', builderSlots, 'Builder Slots'],['🔥', 'LDA', 'Powered By'],['💰', '70%', 'Burned Per Query']].map(([icon,val,label]) => (
                 <div key={label as string} className="text-center">
                   <div className="text-xl font-black" style={{ color: '#14b8a6' }}>{icon} {val}</div>
                   <div className="text-xs mt-1" style={{ color: '#4a5a6a' }}>{label}</div>
@@ -186,7 +186,7 @@ export default function Marketplace() {
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                   <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: '#f5a623' }}>
-                    🔥 {agent.cost} LDA v2
+                    🔥 {agent.cost} LDA
                   </div>
                   {agent.live ? (
                     <a href="/tools"
@@ -215,10 +215,10 @@ export default function Marketplace() {
                 <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#f5a623' }}>For Builders</div>
                 <h3 className="font-black text-2xl mb-2 tracking-tight">Build on Lion X. Earn from Every Query.</h3>
                 <p className="text-sm max-w-lg" style={{ color: '#7a8a9a', lineHeight: 1.7 }}>
-                  Deploy your AI agent on the Lion X platform. Users pay in LDA v2 — you earn a percentage of every query your tool processes. No infrastructure costs. No payment processing. Just build and earn.
+                  Deploy your AI agent on the Lion X platform. Users pay in LDA — you earn a percentage of every query your tool processes. No infrastructure costs. No payment processing. Just build and earn.
                 </p>
                 <div className="flex gap-6 mt-4 flex-wrap">
-                  {[['Up to 80%','Revenue Share'],['LDA v2','Payment Rail'],['Zero','Infrastructure Cost']].map(([v,l]) => (
+                  {[['Up to 80%','Revenue Share'],['LDA','Payment Rail'],['Zero','Infrastructure Cost']].map(([v,l]) => (
                     <div key={l}>
                       <div className="font-black text-lg" style={{ color: '#f5a623' }}>{v}</div>
                       <div className="text-xs" style={{ color: '#4a5a6a' }}>{l}</div>
@@ -251,7 +251,7 @@ export default function Marketplace() {
                     {[
                       { key: 'name',     label: 'Tool Name',            placeholder: 'e.g. Tron Sentiment Analyzer' },
                       { key: 'desc',     label: 'Description',          placeholder: 'What does your tool do?' },
-                      { key: 'cost',     label: 'Query Cost (LDA v2)',   placeholder: 'e.g. 50' },
+                      { key: 'cost',     label: 'Query Cost (LDA)',   placeholder: 'e.g. 50' },
                       { key: 'category', label: 'Category',             placeholder: 'Security / Analytics / Trading / NFT / DeFi' },
                       { key: 'wallet',   label: 'Tron Wallet (payouts)', placeholder: 'Your TRX wallet address' },
                       { key: 'contact',  label: 'Contact (Telegram/Email)', placeholder: 'How to reach you' },

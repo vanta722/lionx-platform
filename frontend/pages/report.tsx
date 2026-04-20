@@ -152,7 +152,7 @@ export default function Report() {
           <div className="rounded-2xl p-6 text-center" style={{ background: '#0a0a16', border: '1px solid rgba(245,166,35,0.2)' }}>
             <div className="text-2xl mb-2">🦁</div>
             <div className="font-black text-lg mb-1">Get Your Own Analysis</div>
-            <p className="text-sm mb-4" style={{ color: '#7a8a9a' }}>Token-gated AI tools on Tron. Burn LDA v2 to run queries.</p>
+            <p className="text-sm mb-4" style={{ color: '#7a8a9a' }}>Token-gated AI tools on Tron. Burn LDA to run queries.</p>
             <div className="flex gap-3 justify-center flex-wrap">
               <Link href="/tools" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline"
                 style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000' }}>
@@ -160,7 +160,7 @@ export default function Report() {
               </Link>
               <Link href="/migrate" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline"
                 style={{ border: '1px solid rgba(245,166,35,0.3)', color: '#f5a623', background: 'transparent' }}>
-                Get LDA v2
+                Get LDA
               </Link>
             </div>
           </div>

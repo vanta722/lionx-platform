@@ -115,7 +115,7 @@ export default function Tools() {
                     style={{ background: activeTool===i ? 'rgba(20,184,166,0.15)' : '#0c0c18' }}>{t.icon}</div>
                   <div>
                     <div className="text-xs font-bold" style={{ color: activeTool===i ? '#14b8a6' : '#dde8f0' }}>{t.name}</div>
-                    <div className="text-xs" style={{ color: '#4a5a6a' }}>{t.cost} LDA v2</div>
+                    <div className="text-xs" style={{ color: '#4a5a6a' }}>{t.cost} LDA</div>
                   </div>
                 </button>
               ))}
@@ -125,14 +125,14 @@ export default function Tools() {
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0" style={{ background: '#0c0c18' }}>{icon}</div>
                   <div>
                     <div className="text-xs font-bold">{name}</div>
-                    <div className="text-xs" style={{ color: '#4a5a6a' }}>{cost} LDA v2</div>
+                    <div className="text-xs" style={{ color: '#4a5a6a' }}>{cost} LDA</div>
                   </div>
                 </div>
               ))}
             </div>
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', padding: '12px 16px' }}>
               <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#4a5a6a' }}>Your Stats</div>
-              {[['LDA v2 Balance', balance.toLocaleString(), '#14b8a6'],['Queries Run', history.length, '#f5a623']].map(([l,v,c]) => (
+              {[['LDA Balance', balance.toLocaleString(), '#14b8a6'],['Queries Run', history.length, '#f5a623']].map(([l,v,c]) => (
                 <div key={l as string} className="mb-3">
                   <div className="text-xs mb-1" style={{ color: '#4a5a6a' }}>{l}</div>
                   <div className="text-lg font-black" style={{ color: c as string }}>{v as string|number}</div>
@@ -149,7 +149,7 @@ export default function Tools() {
                 <div><div className="font-bold text-lg">{tool.name}</div><div className="text-xs" style={{ color: '#7a8a9a' }}>{tool.desc}</div></div>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold" style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: '#f5a623' }}>
-                🔥 {tool.cost} LDA v2 per query
+                🔥 {tool.cost} LDA per query
               </div>
             </div>
 
@@ -165,7 +165,7 @@ export default function Tools() {
                     onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: '#0c0c18' }}>
-                  {[['Tool Cost',`${tool.cost} LDA v2`],['Burn (70%)',`${Math.floor(tool.cost*.7)} LDA v2 🔥`],['Treasury (30%)',`${Math.ceil(tool.cost*.3)} LDA v2`],['Balance After',`${Math.max(0,balance-tool.cost).toLocaleString()} LDA v2`]].map(([k,v]) => (
+                  {[['Tool Cost',`${tool.cost} LDA`],['Burn (70%)',`${Math.floor(tool.cost*.7)} LDA 🔥`],['Treasury (30%)',`${Math.ceil(tool.cost*.3)} LDA`],['Balance After',`${Math.max(0,balance-tool.cost).toLocaleString()} LDA`]].map(([k,v]) => (
                     <div key={k} className="flex justify-between text-xs py-2 border-b last:border-0" style={{ borderColor: 'rgba(255,255,255,0.04)', color: '#7a8a9a' }}>
                       <span>{k}</span><span className="font-bold" style={{ color: '#dde8f0' }}>{v}</span>
                     </div>
@@ -202,7 +202,7 @@ export default function Tools() {
                   {runState === 'idle' && <div className="h-full flex flex-col items-center justify-center gap-3" style={{ color: '#4a5a6a' }}><span className="text-5xl opacity-30">{tool.icon}</span><p className="text-sm">Enter an address and run analysis</p></div>}
                   {(runState === 'approving' || runState === 'running') && (
                     <div className="p-4 rounded-xl font-mono text-xs" style={{ background: '#020208', border: '1px solid rgba(20,184,166,0.15)' }}>
-                      {['▶ Connecting to Tron node...', runState==='running'?'▶ Verifying LDA v2 burn... confirmed':'▶ Waiting for approval...', runState==='running'?'▶ Fetching on-chain data...':'', runState==='running'?'▶ Running AI analysis model...':''].filter(Boolean).map((l,i) => (
+                      {['▶ Connecting to Tron node...', runState==='running'?'▶ Verifying LDA burn... confirmed':'▶ Waiting for approval...', runState==='running'?'▶ Fetching on-chain data...':'', runState==='running'?'▶ Running AI analysis model...':''].filter(Boolean).map((l,i) => (
                         <div key={i} className="py-0.5" style={{ color: i===0?'#14b8a6':i===1?'#22c55e':'#7a8a9a' }}>{l}</div>
                       ))}
                     </div>
@@ -271,7 +271,7 @@ export default function Tools() {
           {/* Cost */}
           <div className="flex items-center justify-between px-4 py-3 rounded-xl mb-4" style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.05)' }}>
             <div className="text-xs" style={{ color: '#7a8a9a' }}>Query cost</div>
-            <div className="text-sm font-bold" style={{ color: '#f5a623' }}>🔥 {tool.cost} LDA v2 ({Math.floor(tool.cost*.7)} burned)</div>
+            <div className="text-sm font-bold" style={{ color: '#f5a623' }}>🔥 {tool.cost} LDA ({Math.floor(tool.cost*.7)} burned)</div>
           </div>
 
           {/* CTA */}

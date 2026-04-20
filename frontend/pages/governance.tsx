@@ -7,7 +7,7 @@ export default function Governance() {
     <>
       <Head>
         <title>Governance | Lion X</title>
-        <meta name="description" content="LDA v2 on-chain governance — coming in Phase 2" />
+        <meta name="description" content="LDA on-chain governance — coming in Phase 2" />
       </Head>
 
       <div style={{ minHeight: '100vh', background: '#050508', paddingTop: 72, display: 'flex', flexDirection: 'column' }}>
@@ -39,7 +39,7 @@ export default function Governance() {
 
           {/* Description */}
           <p style={{ color: '#7a8a9a', fontSize: 15, maxWidth: 480, lineHeight: 1.7, marginBottom: 40 }}>
-            LDA v2 holders will vote on platform decisions — tool pricing, treasury allocation, builder approvals, and more. Every token = one vote. Every result recorded on-chain forever.
+            LDA holders will vote on platform decisions — tool pricing, treasury allocation, builder approvals, and more. Every token = one vote. Every result recorded on-chain forever.
           </p>
 
           {/* Feature preview cards */}
@@ -96,12 +96,12 @@ export default function Governance() {
             <Link href="/migrate"
               className="px-6 py-3 rounded-xl font-bold text-sm no-underline transition-all"
               style={{ background: 'transparent', border: '1px solid rgba(20,184,166,0.3)', color: '#14b8a6' }}>
-              🔄 Migrate to LDA v2
+              🔄 Migrate to LDA
             </Link>
           </div>
 
           <p className="mt-8 text-xs" style={{ color: '#4a5a6a' }}>
-            Hold LDA v2 now to have voting power when governance launches
+            Hold LDA now to have voting power when governance launches
           </p>
 
         </div>

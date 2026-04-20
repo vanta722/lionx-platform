@@ -149,7 +149,7 @@ export default function LionHero() {
 
       {/* HUD data readouts */}
       <div className="absolute top-5 left-10 text-left transition-all duration-1000" style={{ opacity: loaded ? 1 : 0 }}>
-        {['SYS: ONLINE', 'NET: TRON/SHASTA', 'TOKEN: LDA V2'].map((l, i) => (
+        {['SYS: ONLINE', 'NET: TRON/SHASTA', 'TOKEN: LDA'].map((l, i) => (
           <div key={l} className="font-mono text-xs mb-0.5" style={{ color: '#14b8a6', opacity: 0.6, animationDelay: `${i * 200}ms` }}>{l}</div>
         ))}
       </div>
