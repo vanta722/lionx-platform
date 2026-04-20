@@ -180,25 +180,64 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
-  // ── Simulated burn events (replaced by real events post-mainnet) ──
+  // ── Real burn events from Tronscan (QueryExecuted events on Platform contract) ──
+  const PLATFORM_ADDR = process.env.NEXT_PUBLIC_PLATFORM || 'TYKu4AJv6cqNwoyZtnjzpsyE9Tf5WkLQhh'
+  const TOOL_NAMES: Record<string, string> = {
+    'WALLET_ANALYZER':  'WALLET_ANALYZER',
+    'CONTRACT_AUDITOR': 'CONTRACT_AUDITOR',
+    'MARKET_INTEL':     'MARKET_INTEL',
+  }
+  const TOOL_COSTS: Record<string, number> = { WALLET_ANALYZER:50, CONTRACT_AUDITOR:100, MARKET_INTEL:25 }
+
   useEffect(() => {
-    const tools  = ['WALLET_ANALYZER','CONTRACT_AUDITOR','MARKET_INTEL']
-    const costs  = { WALLET_ANALYZER:50, CONTRACT_AUDITOR:100, MARKET_INTEL:25 }
-    const addrs  = ['TXk9','TRm4','TWz2','TKp7','TNq3','TLs8','TMv1','TBc3','TSd9']
-    const t = setInterval(() => {
-      const tool   = tools[Math.floor(Math.random()*tools.length)]
-      const amount = costs[tool as keyof typeof costs]
-      const event: BurnEvent = {
-        id: Date.now().toString(),
-        wallet: addrs[Math.floor(Math.random()*addrs.length)] + '...' + Math.random().toString(36).slice(2,6).toUpperCase(),
-        tool, amount, burned: Math.floor(amount*.7), time: 'Just now'
-      }
-      setBurns(b => [event, ...b.slice(0,19)])
-      setNewBurn(true)
-      setTimeout(() => setNewBurn(false), 800)
-    }, 10000)
+    let lastSeen = new Set<string>()
+
+    async function pollBurnEvents() {
+      try {
+        const res  = await fetch(
+          `https://apilist.tronscanapi.com/api/contract/events?address=${PLATFORM_ADDR}&event_name=QueryExecuted&limit=20`
+        )
+        const data = await res.json()
+        const events = data?.data || []
+        if (!events.length) return
+
+        const newEvents: BurnEvent[] = []
+        for (const ev of events) {
+          const txHash = ev.transaction_id || ev.transactionId
+          if (!txHash || lastSeen.has(txHash)) continue
+          lastSeen.add(txHash)
+
+          // Decode event params
+          const toolHex = ev.result?.toolId || ev.result?.tool || ''
+          // Map common tool names from event
+          let tool = 'WALLET_ANALYZER'
+          if (toolHex.includes('CONTRACT') || toolHex.includes('AUDITOR')) tool = 'CONTRACT_AUDITOR'
+          else if (toolHex.includes('MARKET') || toolHex.includes('INTEL')) tool = 'MARKET_INTEL'
+
+          const caller  = ev.result?.user || ev.contract_map?.[0]?.from || 'Unknown'
+          const amount  = TOOL_COSTS[tool] || 50
+          const burned  = Math.floor(amount * 0.7)
+          const ts      = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : 'Just now'
+
+          newEvents.push({
+            id:     txHash,
+            wallet: caller.length > 10 ? caller.slice(0,6) + '...' + caller.slice(-4) : caller,
+            tool, amount, burned, time: ts
+          })
+        }
+
+        if (newEvents.length > 0) {
+          setBurns(b => [...newEvents, ...b].slice(0, 20))
+          setNewBurn(true)
+          setTimeout(() => setNewBurn(false), 800)
+        }
+      } catch { /* silent fail — Tronscan may be rate-limited */ }
+    }
+
+    pollBurnEvents() // immediate
+    const t = setInterval(pollBurnEvents, 15000) // poll every 15s
     return () => clearInterval(t)
-  }, [])
+  }, [PLATFORM_ADDR])
 
   const fmtNum = (n: number, dec = 0) => n.toLocaleString(undefined, { maximumFractionDigits: dec })
 
@@ -353,7 +392,7 @@ export default function Dashboard() {
                   <span className="w-2 h-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px #ef4444', animation: 'breathe 2s infinite' }}/>
                   <span className="font-bold text-sm">🔥 Live Burn Feed</span>
                   <span className="text-xs px-2 py-0.5 rounded font-mono" style={{ background: 'rgba(20,184,166,0.08)', color: '#14b8a6', border: '1px solid rgba(20,184,166,0.15)' }}>
-                    Mainnet · Real-time
+                    Live · Tronscan
                   </span>
                 </div>
               </div>

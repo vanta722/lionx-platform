@@ -125,6 +125,23 @@ Return a JSON object with exactly these fields:
 Return only the JSON.`,
 }
 
+// ── Rate limiting: max 10 requests per IP per minute ──────────
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+const RATE_LIMIT    = 10
+const RATE_WINDOW   = 60 * 1000 // 1 minute
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  const now    = Date.now()
+  const entry  = rateLimitMap.get(ip)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW })
+    return { allowed: true, remaining: RATE_LIMIT - 1 }
+  }
+  if (entry.count >= RATE_LIMIT) return { allowed: false, remaining: 0 }
+  entry.count++
+  return { allowed: true, remaining: RATE_LIMIT - entry.count }
+}
+
 // Replay protection: store used txHashes with 20-min TTL
 // In-memory store (survives within a single serverless instance lifetime)
 // For production scale, replace with Redis/Upstash
@@ -170,6 +187,13 @@ async function verifyBurnTx(txHash: string, expectedAddress: string): Promise<{ 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Rate limit by IP
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+  const rateCheck = checkRateLimit(ip)
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Rate limit exceeded — max 10 queries per minute' })
+  }
 
   const { tool, input, address, txHash } = req.body
   if (!tool || !input) return res.status(400).json({ error: 'Missing tool or input' })
