@@ -2,6 +2,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import Navbar from '../components/Navbar'
+import LionHero from '../components/LionHero'
 
 const PHRASES = [
   'wallet analysis, contract audits & market intelligence.',
@@ -118,6 +119,9 @@ export default function Home() {
 
       <Navbar/>
 
+      {/* CURSOR TRAIL */}
+      <CursorTrail/>
+
       {/* HERO */}
       <section className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
         <div className="absolute inset-0 pointer-events-none" style={{
@@ -125,6 +129,9 @@ export default function Home() {
         }}/>
 
         <div className="relative z-10 max-w-4xl">
+          {/* Digital Lion */}
+          <LionHero/>
+
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
             style={{ border: '1px solid rgba(20,184,166,0.3)', background: 'rgba(20,184,166,0.08)', color: '#2dd4bf' }}>
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#14b8a6', boxShadow: '0 0 8px #14b8a6', animation: 'breathe 2s infinite' }}/>
@@ -243,4 +250,41 @@ export default function Home() {
       </footer>
     </>
   )
+}
+
+function CursorTrail() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || typeof window === 'undefined') return
+    const ctx = canvas.getContext('2d')!
+    canvas.width  = window.innerWidth
+    canvas.height = window.innerHeight
+    window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight })
+
+    const trail: {x:number,y:number,alpha:number,r:number,c:string}[] = []
+    let mx = 0, my = 0
+
+    window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY })
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      trail.push({ x: mx, y: my, alpha: 0.7, r: 4, c: Math.random() > 0.5 ? '#14b8a6' : '#f5a623' })
+      if (trail.length > 20) trail.shift()
+      trail.forEach((p, i) => {
+        p.alpha -= 0.035
+        p.r     -= 0.12
+        if (p.alpha <= 0 || p.r <= 0) return
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, Math.max(0, p.r), 0, Math.PI * 2)
+        ctx.fillStyle = p.c
+        ctx.globalAlpha = p.alpha * (i / trail.length)
+        ctx.fill()
+      })
+      ctx.globalAlpha = 1
+      requestAnimationFrame(draw)
+    }
+    draw()
+  }, [])
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 999 }}/>
 }
