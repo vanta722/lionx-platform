@@ -77,6 +77,9 @@ contract LDAPlatform {
     mapping(address => Subscription) public subscriptions;
     uint256 public monthlySubCost = 500 * 10**DECIMALS;
 
+    // ── Replay Protection ──
+    mapping(bytes32 => bool) public usedRefs;  // queryRef → consumed
+
     // ── Pause ──
     bool public paused;
 
@@ -126,6 +129,10 @@ contract LDAPlatform {
      * Emits QueryExecuted → AI backend serves result.
      */
     function executeQuery(bytes32 toolId, bytes32 queryRef) external whenNotPaused {
+        require(queryRef != bytes32(0), "Invalid queryRef");
+        require(!usedRefs[queryRef],    "QueryRef already used");
+        usedRefs[queryRef] = true;
+
         Tool storage tool = tools[toolId];
         require(tool.active, "Tool not active");
 

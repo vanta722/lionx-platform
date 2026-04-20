@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 // ── Contract addresses ──────────────────────────────────────────
 const LDA_ADDR   = process.env.NEXT_PUBLIC_PLATFORM    || ''
-const MIGRATION_ADDR = process.env.NEXT_PUBLIC_MIGRATION || ''
+// MIGRATION_ADDR removed — using LDA v1 directly, no migration contract
 const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || '' // treasury wallet (set NEXT_PUBLIC_TREASURY in env)
 const LDA_SUPPLY = 20_207_717 // LDA total supply
 // LDA supply is fixed — no new tokens minted
