@@ -240,7 +240,7 @@ export default function Home() {
         style={{ borderTop: '1px solid rgba(20,184,166,0.15)', background: '#08080f' }}>
         <span className="font-extrabold text-base" style={{ color: '#14b8a6' }}>🦁 LION X</span>
         <div className="flex gap-6">
-          {[['Website','https://lionxeco.net'],['Twitter','https://twitter.com/LionX05494692'],['Telegram','https://t.me/Lionxone'],['Tronscan','https://tronscan.org/#/token20/TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1']].map(([l,h]) => (
+          {[['Website','https://lionxeco.net'],['Twitter','https://x.com/lionxeco'],['Telegram','https://t.me/Lionxone'],['Tronscan','https://tronscan.org/#/token20/TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1']].map(([l,h]) => (
             <a key={l} href={h} target="_blank" rel="noreferrer" className="text-xs no-underline transition-colors" style={{ color: '#4a5a6a' }}
               onMouseEnter={e => (e.currentTarget.style.color = '#14b8a6')}
               onMouseLeave={e => (e.currentTarget.style.color = '#4a5a6a')}>{l}</a>
