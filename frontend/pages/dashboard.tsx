@@ -9,11 +9,11 @@ const LDA_ADDR   = process.env.NEXT_PUBLIC_PLATFORM    || ''
 const MIGRATION_ADDR = process.env.NEXT_PUBLIC_MIGRATION || ''
 const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || '' // treasury wallet (set NEXT_PUBLIC_TREASURY in env)
 const OLD_LDA_SUPPLY = 20_207_717 // real old LDA max supply
-const MAX_V2_SUPPLY  = 10_000_000 // hard cap
+const MAX_SUPPLY  = 10_000_000 // hard cap
 const BURN_PERCENT = 70          // 2 old LDA → 1 LDA
 
 interface LiveStats {
-  // Migration stats
+  // Burn stats
   platformActive:      boolean
   timeRemaining:      number   // seconds
   totalSpent:     number   // old LDA sent in
@@ -29,7 +29,7 @@ interface LiveStats {
   holders:            number
   burnRate24h:        number   // LDA burned in last 24h (approx)
   // Derived
-  migrationPct:       number   // % of old LDA migrated
+  burnedPct:       number   // % of old LDA migrated
   burnPct:            number   // % of issued v2 that has been burned
   supplyCreatedPct:   number   // % of max 10M that exists
 }
@@ -37,10 +37,10 @@ interface LiveStats {
 const DEFAULT_STATS: LiveStats = {
   platformActive: true, timeRemaining: 30 * 86400,
   totalSpent: 0, totalBurned: 0,
-  circulatingSupply: OLD_LDA_SUPPLY, remainingSupply: MAX_V2_SUPPLY,
+  circulatingSupply: OLD_LDA_SUPPLY, remainingSupply: MAX_SUPPLY,
   totalSupply: 0, burnedSupply: 0, circulating: 0,
   treasuryBalance: 0, holders: 281, burnRate24h: 0,
-  migrationPct: 0, burnPct: 0, supplyCreatedPct: 0,
+  burnedPct: 0, burnPct: 0, supplyCreatedPct: 0,
 }
 
 interface BurnEvent {
@@ -128,10 +128,10 @@ export default function Dashboard() {
           .then(r => r.json()).then(d => d?.trc20_tokens?.[0]?.holders_count || 281),
       ])
 
-      const v2Supply   = Number(supply) / 1e6
-      const v2Burned   = Number(burned) / 1e6
-      const circulating = v2Supply - v2Burned
-      const oldMigrated   = Number(migStats[2]) / 1e6
+      const ldaSupply   = Number(supply) / 1e6
+      const ldaBurned   = Number(burned) / 1e6
+      const circulating = ldaSupply - ldaBurned
+      const totalSpentAmt   = Number(migStats[2]) / 1e6
       const totalBurned      = Number(migStats[3]) / 1e6
       const timeRemaining = Number(migStats[4])
 
@@ -142,23 +142,23 @@ export default function Dashboard() {
       const s: LiveStats = {
         platformActive:    migStats[0],
         timeRemaining,
-        totalSpent:   oldMigrated,
+        totalSpent:   totalSpentAmt,
         totalBurned,
-        circulatingSupply:  OLD_LDA_SUPPLY - oldMigrated,
+        circulatingSupply:  OLD_LDA_SUPPLY - totalSpentAmt,
         remainingSupply:  OLD_LDA_SUPPLY,
-        totalSupply:    v2Supply,
-        burnedSupply:    v2Burned,
+        totalSupply:    ldaSupply,
+        burnedSupply:    ldaBurned,
         circulating,
         treasuryBalance:  treasuryBal,
         holders:          Number(holders),
-        burnRate24h:      v2Burned,  // cumulative for now
-        migrationPct:     (oldMigrated / OLD_LDA_SUPPLY) * 100,
-        burnPct:          totalBurned > 0 ? (v2Burned / totalBurned) * 100 : 0,
-        supplyCreatedPct: (totalBurned / MAX_V2_SUPPLY) * 100,
+        burnRate24h:      ldaBurned,  // cumulative for now
+        burnedPct:     (totalSpentAmt / OLD_LDA_SUPPLY) * 100,
+        burnPct:          totalBurned > 0 ? (ldaBurned / totalBurned) * 100 : 0,
+        supplyCreatedPct: (totalBurned / MAX_SUPPLY) * 100,
       }
 
       setStats(s)
-      setBurnHistory(h => [...h.slice(1), v2Burned])
+      setBurnHistory(h => [...h.slice(1), ldaBurned])
       setIssueHistory(h => [...h.slice(1), totalBurned])
     } catch (e) {
       // TronLink not connected — show defaults
@@ -269,36 +269,36 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-2 h-2 rounded-full" style={{ background: stats.platformActive ? '#f5a623' : '#ef4444', boxShadow: `0 0 8px ${stats.platformActive ? '#f5a623' : '#ef4444'}`, animation: 'breathe 1.5s infinite' }}/>
                   <span className="text-xs font-bold uppercase tracking-wider" style={{ color: stats.platformActive ? '#f5a623' : '#ef4444' }}>
-                    Migration Window {stats.platformActive ? 'OPEN' : 'CLOSED'}
+                    Platform {stats.platformActive ? 'ACTIVE' : 'PAUSED'}
                   </span>
                 </div>
                 <div className="font-black text-xl mb-1">Swap Old LDA → LDA · 2:1 Ratio</div>
                 <div className="text-sm" style={{ color: '#7a8a9a' }}>
-                  LDA only exists through migration. The full 10M cap requires all {fmtNum(OLD_LDA_SUPPLY)} old LDA to be migrated.
+                  Every query burns LDA permanently. 70% destroyed, 30% to treasury.
                 </div>
               </div>
               <div className="flex flex-col items-center md:items-end gap-2">
                 {stats.platformActive && <Countdown seconds={stats.timeRemaining}/>}
                 <Link href="/tools" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline text-center"
                   style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', minWidth: 160 }}>
-                  Migrate Now →
+                  Use AI Tools →
                 </Link>
               </div>
             </div>
 
-            {/* Migration progress bar */}
+            {/* Burn progress bar */}
             <div className="mt-5">
               <div className="flex justify-between text-xs mb-2" style={{ color: '#7a8a9a' }}>
-                <span>Old LDA Migrated: <strong style={{color:'#f5a623'}}>{fmtNum(stats.totalSpent)} / {fmtNum(OLD_LDA_SUPPLY)}</strong></span>
-                <span>{stats.migrationPct.toFixed(2)}% complete</span>
+                <span>Total LDA Burned: <strong style={{color:'#f5a623'}}>{fmtNum(stats.totalSpent)} / {fmtNum(OLD_LDA_SUPPLY)}</strong></span>
+                <span>{stats.burnedPct ? stats.burnedPct.toFixed(2) + '% burned' : '0% burned'}</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: '#0c0c18' }}>
                 <div className="h-full rounded-full transition-all duration-1000"
-                  style={{ width: `${stats.migrationPct}%`, background: 'linear-gradient(90deg,#f5a623,#14b8a6)' }}/>
+                  style={{ width: `${stats.burnedPct}%`, background: 'linear-gradient(90deg,#f5a623,#14b8a6)' }}/>
               </div>
               <div className="flex justify-between text-xs mt-1.5">
                 <span style={{ color: '#4a5a6a' }}>LDA Created: {fmtNum(stats.totalBurned)}</span>
-                <span style={{ color: '#4a5a6a' }}>Max Possible: {fmtNum(MAX_V2_SUPPLY)}</span>
+                <span style={{ color: '#4a5a6a' }}>Hard Cap: {fmtNum(MAX_SUPPLY)}</span>
               </div>
             </div>
           </div>
@@ -333,8 +333,8 @@ export default function Dashboard() {
           {/* ── KEY STATS GRID ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
-              { icon:'💎', label:'Max Hard Cap',       val: fmtNum(MAX_V2_SUPPLY),           sub:'LDA total possible',          color:'#14b8a6' },
-              { icon:'🔄', label:'v2 Supply Created',  val: `${stats.supplyCreatedPct.toFixed(2)}%`, sub:`${fmtNum(stats.totalBurned)} of 10M`,  color:'#f5a623' },
+              { icon:'💎', label:'Max Hard Cap',       val: fmtNum(MAX_SUPPLY),           sub:'LDA total possible',          color:'#14b8a6' },
+              { icon:'🔄', label:'Supply Burned',  val: `${stats.supplyCreatedPct.toFixed(2)}%`, sub:`${fmtNum(stats.totalBurned)} of 10M`,  color:'#f5a623' },
               { icon:'🔥', label:'Total Burned',       val: fmtNum(stats.burnedSupply),     sub:`${stats.burnPct.toFixed(2)}% of issued`,  color:'#ef4444' },
               { icon:'🏦', label:'Treasury Balance',   val: fmtNum(stats.treasuryBalance),   sub:'30% of all burns',               color:'#a78bfa' },
             ].map(s => (
@@ -351,9 +351,9 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
               { icon:'👥', label:'LDA Holders',     val: fmtNum(stats.holders),           sub:'Unique wallets',                 color:'#14b8a6' },
-              { icon:'📊', label:'Old LDA Remaining',  val: fmtNum(stats.circulatingSupply),   sub:'Not yet migrated',               color:'#7a8a9a' },
-              { icon:'⏳', label:'Max More v2 Possible',val: fmtNum(stats.remainingSupply),  sub:'If all remaining migrates',      color:'#f5a623' },
-              { icon:'⚡', label:'Migration Ratio',    val: '2 : 1',                         sub:'Old LDA → LDA',               color:'#14b8a6' },
+              { icon:'📊', label:'LDA Circulating',  val: fmtNum(stats.circulatingSupply),   sub:'LDA in circulation',               color:'#7a8a9a' },
+              { icon:'⏳', label:'Remaining Supply',val: fmtNum(stats.remainingSupply),  sub:'Remaining hard cap',      color:'#f5a623' },
+              { icon:'⚡', label:'Burn Split',    val: '2 : 1',                         sub:'Old LDA → LDA',               color:'#14b8a6' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
                 <div className="text-2xl mb-2">{s.icon}</div>
@@ -378,7 +378,7 @@ export default function Dashboard() {
               </div>
               <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
                 <div className="flex justify-between items-center mb-1">
-                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#4a5a6a' }}>v2 Supply Issued</div>
+                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#4a5a6a' }}>LDA Burned</div>
                   <span className="text-xs font-bold" style={{ color: '#f5a623' }}>🔄 {fmtNum(stats.totalBurned)} LDA</span>
                 </div>
                 <MiniChart data={issueHistory} color="#f5a623"/>

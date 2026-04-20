@@ -93,10 +93,10 @@ export default function Governance() {
               style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000' }}>
               ⚡ Use AI Tools Now
             </Link>
-            <Link href="/migrate"
+            <Link href="/tools"
               className="px-6 py-3 rounded-xl font-bold text-sm no-underline transition-all"
               style={{ background: 'transparent', border: '1px solid rgba(20,184,166,0.3)', color: '#14b8a6' }}>
-              🔄 Migrate to LDA
+              🔗 Learn More
             </Link>
           </div>
 

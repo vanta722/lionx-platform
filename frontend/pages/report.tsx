@@ -158,9 +158,9 @@ export default function Report() {
                 style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000' }}>
                 Try the Tools →
               </Link>
-              <Link href="/migrate" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline"
+              <Link href="/dashboard" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline"
                 style={{ border: '1px solid rgba(245,166,35,0.3)', color: '#f5a623', background: 'transparent' }}>
-                Get LDA
+                Dashboard
               </Link>
             </div>
           </div>

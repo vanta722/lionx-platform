@@ -94,11 +94,11 @@ export default function Home() {
   }, [])
 
   // Fetch real burned supply + animate counter
-  const LDA_V2_ADDR = process.env.NEXT_PUBLIC_LDA_V2 || 'TURQgDcWWeg633Azz8SMrDrHHYdgM3Nfxi'
+  const LDA_ADDR = process.env.NEXT_PUBLIC_PLATFORM || 'TQMc3D4Q6WAZmDuDj5ySZ4dMNKd87rgVPD'
   useEffect(() => {
     async function fetchBurned() {
       try {
-        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_V2_ADDR}`)
+        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_ADDR}`)
         const data = await res.json()
         const token = data?.trc20_tokens?.[0]
         if (token) {
@@ -111,7 +111,7 @@ export default function Home() {
     fetchBurned()
     const t = setInterval(fetchBurned, 30000)
     return () => clearInterval(t)
-  }, [LDA_V2_ADDR])
+  }, [LDA_ADDR])
 
   // Animate counter up
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function Home() {
     { val: '10,000,000', label: 'LDA Max Supply' },
     { val: '281',        label: 'Existing Holders' },
     { val: displayBurned > 0 ? displayBurned.toLocaleString() : '0', label: 'Tokens Burned', live: true, fire: true },
-    { val: countdown,    label: 'Migration Window', live: true },
+    { val: countdown, label: 'Platform Launch', live: true },
   ]
 
   const tools = [
@@ -175,7 +175,7 @@ export default function Home() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
             style={{ border: '1px solid rgba(20,184,166,0.3)', background: 'rgba(20,184,166,0.08)', color: '#2dd4bf' }}>
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#14b8a6', boxShadow: '0 0 8px #14b8a6', animation: 'breathe 2s infinite' }}/>
-            Migration Now Live — Upgrade Your LDA
+            Lion X is Live — AI Tools Powered by LDA
           </div>
 
           <h1 className="font-black leading-none tracking-tight mb-6" style={{ fontSize: 'clamp(44px,7.5vw,88px)', letterSpacing: -3 }}>
@@ -285,7 +285,7 @@ export default function Home() {
           Don't Hold the{' '}
           <span style={{ background: 'linear-gradient(135deg,#f5a623,#ff9a00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Old Version.</span>
         </h2>
-        <p className="text-base mb-10 relative" style={{ color: '#7a8a9a' }}>Migration window is live. Upgrade your position before it closes.</p>
+        <p className="text-base mb-10 relative" style={{ color: '#7a8a9a' }}>Burn LDA to access AI-powered wallet analysis, contract audits and market intelligence.</p>
         <Link href="/tools"
           className="relative inline-block px-10 py-4 rounded-xl font-extrabold text-base no-underline"
           style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 6px 28px rgba(245,166,35,0.35)' }}>

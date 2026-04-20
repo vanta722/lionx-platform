@@ -1,6 +1,6 @@
 /**
  * Tron / TronLink utility library
- * Handles wallet connection, contract calls, and LDA v2 interactions
+ * Handles wallet connection, contract calls, and LDA interactions
  */
 
 declare global {
@@ -120,7 +120,7 @@ export const TIER_COLORS: Record<number, string> = {
 // ── Approval + Query Execution ──
 
 /**
- * Approve platform contract to spend LDA v2 on user's behalf.
+ * Approve platform contract to spend LDA on user's behalf.
  * Must be called before first query (or when allowance runs low).
  */
 export async function approvePlatform(amount: number): Promise<string> {
@@ -131,7 +131,7 @@ export async function approvePlatform(amount: number): Promise<string> {
 }
 
 /**
- * Execute an AI query — burns LDA v2.
+ * Execute an AI query — burns LDA.
  * Emits QueryExecuted event that backend picks up.
  */
 export async function executeQuery(toolId: string, queryRef: string): Promise<string> {
@@ -144,15 +144,15 @@ export async function executeQuery(toolId: string, queryRef: string): Promise<st
   return tx
 }
 
-// ── Migration ──
+// ── Legacy (unused) ──
 
-// Migration removed — platform uses LDA token directly
+
 // Placeholder to avoid import errors
 export async function getMigrationStats() {
   return {
     open:          false,
     deadline:      0,
-    totalMigrated: 0,
+    totalBurned: 0,
     totalIssued:   0,
     timeRemaining: 0,
   }

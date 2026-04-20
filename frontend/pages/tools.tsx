@@ -41,7 +41,7 @@ export default function Tools() {
 
   const tool     = TOOLS[activeTool]
   const PLATFORM = process.env.NEXT_PUBLIC_PLATFORM || ''
-  const LDA_V2   = process.env.NEXT_PUBLIC_LDA_V2   || ''
+  const LDA_V1   = process.env.NEXT_PUBLIC_LDA_V1   || 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 
   function shareReport() {
     if (!result || result.error) return
@@ -70,7 +70,7 @@ export default function Tools() {
     try {
       const tw = (window as any).tronWeb
       if (!tw) throw new Error('TronLink not connected')
-      const lda = await tw.contract().at(LDA_V2)
+      const lda = await tw.contract().at(LDA_V1)
       await lda.approve(PLATFORM, (tool.cost * 1e6 * 10).toString()).send({ feeLimit: 100_000_000 })
       await new Promise(r => setTimeout(r, 4000))
       setRunState('running')
