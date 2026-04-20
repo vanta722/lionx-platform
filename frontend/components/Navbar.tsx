@@ -15,6 +15,7 @@ export default function Navbar() {
     { href: '/',             label: 'Home',        icon: '🏠' },
     { href: '/tools',        label: 'AI Tools',    icon: '⚡' },
     { href: '/dashboard',    label: 'Dashboard',   icon: '📊' },
+    { href: '/governance',   label: 'Governance',  icon: '🗳️' },
     { href: '/marketplace',  label: 'Marketplace', icon: '🏪' },
     { href: '/migrate',      label: 'Migrate',     icon: '🔄' },
   ]
