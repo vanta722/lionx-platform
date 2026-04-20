@@ -12,6 +12,7 @@ export default function Navbar() {
   const nav = [
     { href: '/',             label: 'Home'        },
     { href: '/tools',        label: 'AI Tools'    },
+    { href: '/dashboard',    label: 'Dashboard'   },
     { href: '/marketplace',  label: 'Marketplace' },
     { href: '/migrate',      label: 'Migrate'     },
   ]

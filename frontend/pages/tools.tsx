@@ -22,6 +22,16 @@ export default function Tools() {
   const tool = TOOLS[activeTool]
   const PLATFORM = process.env.NEXT_PUBLIC_PLATFORM || ''
   const LDA_V2   = process.env.NEXT_PUBLIC_LDA_V2   || ''
+  const [copied,  setCopied]  = useState(false)
+
+  function shareReport() {
+    if (!result || result.error) return
+    const encoded = btoa(JSON.stringify({ tool: tool.id, input, result }))
+    const url = `${window.location.origin}/report?d=${encoded}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   async function runQuery() {
     if (!connected || !input.trim()) return
@@ -173,10 +183,18 @@ export default function Tools() {
               <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <span className="text-xs font-bold" style={{ color: '#7a8a9a' }}>⚡ Analysis Output</span>
+                  <div className="flex items-center gap-2">
+                  {runState === 'done' && result && !result.error && (
+                    <button onClick={shareReport} className="text-xs font-bold px-3 py-1 rounded-lg transition-all"
+                      style={{ background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(20,184,166,0.08)', color: copied ? '#22c55e' : '#14b8a6', border: `1px solid ${copied ? 'rgba(34,197,94,0.2)' : 'rgba(20,184,166,0.2)'}` }}>
+                      {copied ? '✅ Copied!' : '🔗 Share Report'}
+                    </button>
+                  )}
                   <span className="text-xs font-bold px-2.5 py-1 rounded"
                     style={{ background: runState === 'done' ? 'rgba(34,197,94,0.1)' : runState === 'running' || runState === 'approving' ? 'rgba(245,166,35,0.1)' : 'rgba(20,184,166,0.1)', color: runState === 'done' ? '#22c55e' : runState === 'running' || runState === 'approving' ? '#f5a623' : '#14b8a6', border: `1px solid ${runState === 'done' ? 'rgba(34,197,94,0.2)' : 'rgba(20,184,166,0.2)'}` }}>
                     {runState === 'done' ? 'Complete' : runState === 'running' ? 'Analyzing...' : runState === 'approving' ? 'Approving...' : 'Ready'}
                   </span>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5">

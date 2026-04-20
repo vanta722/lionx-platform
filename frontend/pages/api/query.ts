@@ -1,41 +1,128 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-const TOOL_PROMPTS: Record<string, (input: string) => string> = {
-  WALLET_ANALYZER: (addr) => `
-You are a Tron blockchain analyst. Analyze wallet address: ${addr}
-Fetch data from Tronscan and return a JSON analysis with these exact fields:
-- score: risk score 0-100 (0=risky, 100=safe)
-- scoreLabel: "RISK SCORE"
-- verdict: one line verdict e.g. "⚠ Moderate Risk" or "✓ Low Risk"
-- type: wallet type e.g. "Active Trader", "Long-term Holder", "Bot"
-- metrics: array of {label, value, color} objects (6 items: TRX Balance, Token Count, Total Txns, Wallet Age, Avg Tx Size, Rug Exposure)
-- analysis: 3-4 sentence AI analysis with key words wrapped in <span style="color:#dde8f0;font-weight:600">text</span>
-- flags: array of {level:"ok"|"warn"|"risk", text} items (5 items)
-Return valid JSON only.`,
+// Fetch real on-chain data from Tronscan API
+async function getWalletData(address: string) {
+  try {
+    const [acctRes, txRes] = await Promise.all([
+      fetch(`https://apilist.tronscanapi.com/api/accountv2?address=${address}`),
+      fetch(`https://apilist.tronscanapi.com/api/transaction?address=${address}&limit=20&start=0`)
+    ])
+    const acct = await acctRes.json()
+    const txs  = await txRes.json()
+    return { acct, txs }
+  } catch { return null }
+}
 
-  CONTRACT_AUDITOR: (addr) => `
-You are a smart contract security auditor. Audit TRC-20 contract: ${addr}
-Return a JSON analysis with:
-- score: safety score 0-100 (100=safe)
-- scoreLabel: "SAFETY SCORE"
-- verdict: e.g. "✓ Relatively Safe" or "⚠ High Risk"
-- type: "TRC-20 Token" or specific type
-- metrics: array of {label, value, color} (6 items: Honeypot, Mint Function, Ownership, Verified, Buy Tax, Sell Tax)
-- analysis: 3-4 sentence audit summary with key terms highlighted
-- flags: array of {level:"ok"|"warn"|"risk", text} (6 items)
-Return valid JSON only.`,
+async function getContractData(address: string) {
+  try {
+    const [tokenRes, contractRes] = await Promise.all([
+      fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${address}`),
+      fetch(`https://apilist.tronscanapi.com/api/contract?contract=${address}`)
+    ])
+    const token    = await tokenRes.json()
+    const contract = await contractRes.json()
+    return { token, contract }
+  } catch { return null }
+}
 
-  MARKET_INTEL: (token) => `
-You are a crypto market analyst. Analyze token: ${token} on Tron blockchain.
-Return a JSON analysis with:
-- score: sentiment score 0-100
-- scoreLabel: "SENTIMENT SCORE"
-- verdict: e.g. "📈 Cautiously Bullish"
-- type: market trend e.g. "Accumulation", "Distribution", "Neutral"
-- metrics: array of {label, value, color} (6 items: Holders, Liquidity, 24h Vol, Buy Pressure, Holder Trend, Supply Float)
-- analysis: 3-4 sentence market intelligence summary
-- flags: array of {level:"ok"|"warn"|"risk", text} (5 items)
-Return valid JSON only.`,
+async function getTokenData(nameOrAddress: string) {
+  try {
+    const isAddr = nameOrAddress.startsWith('T') && nameOrAddress.length > 30
+    const url    = isAddr
+      ? `https://apilist.tronscanapi.com/api/token_trc20?contract=${nameOrAddress}`
+      : `https://apilist.tronscanapi.com/api/token_trc20?name=${nameOrAddress}&limit=5`
+    const res  = await fetch(url)
+    const data = await res.json()
+    return data
+  } catch { return null }
+}
+
+const SYSTEM_PROMPT = `You are an expert Tron blockchain analyst and AI assistant for the Lion X platform.
+You analyze real on-chain data and provide clear, actionable intelligence for crypto users.
+Always respond with structured, accurate insights. Be direct and avoid filler.
+Return ONLY valid JSON — no markdown, no explanation outside the JSON.`
+
+const TOOL_PROMPTS: Record<string, (input: string, data: any) => string> = {
+  WALLET_ANALYZER: (addr, data) => `
+Analyze this Tron wallet address: ${addr}
+
+On-chain data retrieved:
+${JSON.stringify(data, null, 2)}
+
+Return a JSON object with exactly these fields:
+{
+  "score": <number 0-100, higher = safer/more reputable>,
+  "scoreLabel": "RISK SCORE",
+  "verdict": "<emoji + short verdict e.g. '⚠ Moderate Risk' or '✓ Low Risk' or '🔴 High Risk'>",
+  "type": "<wallet classification: Active Trader | Long-term Holder | DeFi User | Bot/Automated | New Wallet | Whale>",
+  "metrics": [
+    {"label": "TRX Balance",   "value": "<value>", "color": "#14b8a6"},
+    {"label": "Token Count",   "value": "<value>", "color": "#f5a623"},
+    {"label": "Total Txns",    "value": "<value>", "color": "#14b8a6"},
+    {"label": "Wallet Age",    "value": "<value>", "color": "#22c55e"},
+    {"label": "Avg Tx Size",   "value": "<value>", "color": "#f5a623"},
+    {"label": "Rug Exposure",  "value": "<value>", "color": "#ef4444"}
+  ],
+  "analysis": "<3-4 sentences with key terms wrapped in <span style=\\"color:#dde8f0;font-weight:600\\">text</span>>",
+  "flags": [
+    {"level": "ok|warn|risk", "text": "<finding>"}
+  ]
+}
+Return only the JSON.`,
+
+  CONTRACT_AUDITOR: (addr, data) => `
+Audit this TRC-20 smart contract: ${addr}
+
+Contract and token data:
+${JSON.stringify(data, null, 2)}
+
+Return a JSON object with exactly these fields:
+{
+  "score": <number 0-100, higher = safer>,
+  "scoreLabel": "SAFETY SCORE",
+  "verdict": "<emoji + verdict e.g. '✓ Relatively Safe' or '⚠ Proceed with Caution' or '🔴 High Risk'>",
+  "type": "<contract type: TRC-20 Token | Meme Token | DeFi Protocol | NFT Contract | Unknown>",
+  "metrics": [
+    {"label": "Honeypot",    "value": "None | Detected",        "color": "<#22c55e or #ef4444>"},
+    {"label": "Mint Func",   "value": "Present | None",          "color": "<#f5a623 or #22c55e>"},
+    {"label": "Ownership",   "value": "Renounced | Active",      "color": "<#22c55e or #f5a623>"},
+    {"label": "Verified",    "value": "Yes | No",                "color": "<#22c55e or #ef4444>"},
+    {"label": "Buy Tax",     "value": "<value>%",                "color": "#14b8a6"},
+    {"label": "Sell Tax",    "value": "<value>%",                "color": "#14b8a6"}
+  ],
+  "analysis": "<3-4 sentence audit summary with key terms highlighted>",
+  "flags": [
+    {"level": "ok|warn|risk", "text": "<finding>"}
+  ]
+}
+Return only the JSON.`,
+
+  MARKET_INTEL: (token, data) => `
+Provide market intelligence for Tron token: ${token}
+
+Token data:
+${JSON.stringify(data, null, 2)}
+
+Return a JSON object with exactly these fields:
+{
+  "score": <number 0-100, market sentiment>,
+  "scoreLabel": "SENTIMENT SCORE",
+  "verdict": "<emoji + verdict e.g. '📈 Cautiously Bullish' or '📉 Bearish Pressure' or '➡ Neutral'>",
+  "type": "<market condition: Accumulation | Distribution | Consolidation | Breakout | Decline>",
+  "metrics": [
+    {"label": "Holders",       "value": "<value>",          "color": "#14b8a6"},
+    {"label": "Liquidity",     "value": "$<value>",         "color": "#f5a623"},
+    {"label": "24h Volume",    "value": "$<value>",         "color": "#14b8a6"},
+    {"label": "Buy Pressure",  "value": "Low|Med|High",     "color": "<appropriate>"},
+    {"label": "Holder Trend",  "value": "<+/- %>",          "color": "<appropriate>"},
+    {"label": "Supply Float",  "value": "<value>%",         "color": "#f5a623"}
+  ],
+  "analysis": "<3-4 sentence market intelligence with key data highlighted>",
+  "flags": [
+    {"level": "ok|warn|risk", "text": "<signal>"}
+  ]
+}
+Return only the JSON.`,
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -44,11 +131,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { tool, input, address } = req.body
   if (!tool || !input) return res.status(400).json({ error: 'Missing tool or input' })
 
-  const prompt = TOOL_PROMPTS[tool]
-  if (!prompt) return res.status(400).json({ error: 'Unknown tool' })
+  const promptFn = TOOL_PROMPTS[tool]
+  if (!promptFn) return res.status(400).json({ error: 'Unknown tool' })
 
   try {
-    // Call OpenRouter AI
+    // Fetch real on-chain data first
+    let onChainData: any = null
+    if (tool === 'WALLET_ANALYZER')  onChainData = await getWalletData(input)
+    if (tool === 'CONTRACT_AUDITOR') onChainData = await getContractData(input)
+    if (tool === 'MARKET_INTEL')     onChainData = await getTokenData(input)
+
+    const prompt = promptFn(input, onChainData)
+
+    // Call OpenRouter
     const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -59,21 +154,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       body: JSON.stringify({
         model: 'google/gemini-flash-1.5',
-        messages: [{ role: 'user', content: prompt(input) }],
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user',   content: prompt }
+        ],
         response_format: { type: 'json_object' },
-        temperature: 0.3,
+        temperature: 0.2,
+        max_tokens: 1500,
       }),
     })
 
-    const data    = await aiRes.json()
-    const content = data.choices?.[0]?.message?.content
+    const aiData  = await aiRes.json()
+    const content = aiData.choices?.[0]?.message?.content
 
-    if (!content) throw new Error('No AI response')
+    if (!content) throw new Error('No AI response received')
 
+    // Parse and return
     const parsed = JSON.parse(content)
-    return res.status(200).json(parsed)
+    return res.status(200).json({ ...parsed, queriedBy: address, timestamp: Date.now() })
+
   } catch (e: any) {
-    console.error('Query API error:', e)
-    return res.status(500).json({ error: 'AI query failed — please try again' })
+    console.error('Query error:', e?.message)
+    return res.status(500).json({ error: 'Analysis failed — please try again', detail: e?.message })
   }
 }
