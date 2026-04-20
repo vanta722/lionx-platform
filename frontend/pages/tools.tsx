@@ -230,11 +230,11 @@ export default function Tools() {
       </div>
 
       {/* ── Mobile layout ──────────────────────────────────────── */}
-      <div className="md:hidden" style={{ background: '#050508', minHeight: '100vh', paddingBottom: 80 }}>
+      <div className="md:hidden" style={{ background: '#050508', minHeight: '100vh', paddingBottom: 80, paddingTop: 96 }}>
         <Navbar/>
 
-        {/* Tool Selector — horizontal chips */}
-        <div className="sticky top-14 z-30 px-4 pt-3 pb-2" style={{ background: 'rgba(5,5,8,0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(20,184,166,0.1)' }}>
+        {/* Tool Selector — horizontal chips, sticky below navbar+ticker (96px) */}
+        <div className="sticky z-30 px-4 pt-3 pb-2" style={{ top: 96, background: 'rgba(5,5,8,0.97)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(20,184,166,0.1)' }}>
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
             {TOOLS.map((t,i) => (
               <button key={t.id} onClick={() => { setActiveTool(i); setInput(''); setRunState('idle'); setResult(null) }}

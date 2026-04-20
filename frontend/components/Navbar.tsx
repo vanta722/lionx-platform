@@ -108,7 +108,7 @@ export default function Navbar() {
         </div>
       )}
       {/* Activity Ticker — below navbar */}
-      <div style={{ position:'fixed', top:56, left:0, right:0, zIndex:40 }}>
+      <div style={{ position:'fixed', top:56, left:0, right:0, zIndex:39, pointerEvents:'none' }}>
         <ActivityTicker />
       </div>
     </>
