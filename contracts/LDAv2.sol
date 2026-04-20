@@ -212,7 +212,7 @@ contract LDAv2 is ITRC20 {
      */
     function mint(address to, uint256 amount) external onlyOwner {
         require(to != address(0), "LDA: mint to zero");
-        require(_totalSupply + totalBurned + amount <= MAX_SUPPLY, "LDA: exceeds hard cap");
+        require(_totalSupply + amount <= MAX_SUPPLY, "LDA: exceeds hard cap");
         _totalSupply += amount;
         _balances[to] += amount;
         emit Transfer(address(0), to, amount);

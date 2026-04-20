@@ -79,7 +79,7 @@ contract LDAMigration {
         // Pull old LDA from user
         require(
             oldLDA.transferFrom(msg.sender, address(this), amount),
-            "Old LDA transfer failed"
+            "Migration: v1 transfer failed — approve this contract first"
         );
 
         // Mint LDA v2 to user
