@@ -112,15 +112,16 @@ export default function Home() {
         <meta name="description" content="Token-gated AI tools for crypto. Burn LDA v2 to access wallet analysis, contract audits and market intelligence on Tron."/>
       </Head>
 
-      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none opacity-40"/>
+      {/* Background particles — desktop only */}
+      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none opacity-40 hidden md:block"/>
       <div className="fixed inset-0 z-0 pointer-events-none" style={{
         backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px)'
       }}/>
 
       <Navbar/>
 
-      {/* CURSOR TRAIL */}
-      <CursorTrail/>
+      {/* CURSOR TRAIL — desktop only, causes repaints on mobile */}
+      <div className="hidden md:block"><CursorTrail/></div>
 
       {/* HERO */}
       <section className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
@@ -129,7 +130,7 @@ export default function Home() {
         }}/>
 
         <div className="relative z-10 max-w-4xl">
-          {/* Digital Lion */}
+          {/* Digital Lion — full cinematic on desktop, lightweight on mobile */}
           <LionHero/>
 
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
@@ -145,9 +146,26 @@ export default function Home() {
           </h1>
 
           <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: '#7a8a9a', lineHeight: 1.8 }}>
-            Token-gated AI intelligence for Tron.<br/>
-            <span style={{ borderRight: '2px solid #14b8a6', paddingRight: 3 }}>{typeText}</span>
+            Token-gated AI intelligence for Tron.
           </p>
+          {/* Typewriter — desktop only. Mobile gets static text to prevent portrait layout shift */}
+          <div className="hidden sm:block mb-10" style={{ position: 'relative', height: 28 }}>
+            <span style={{
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+              color: '#14b8a6',
+              fontWeight: 500,
+              fontSize: 15,
+              borderRight: '2px solid #14b8a6',
+              paddingRight: 4,
+            }}>{typeText}</span>
+          </div>
+          {/* Mobile — static, no animation, no shift */}
+          <div className="sm:hidden mb-10 text-sm font-medium text-center" style={{ color: '#14b8a6' }}>
+            Wallet analysis · Contract audits · Market intel
+          </div>
 
           <div className="flex gap-3 justify-center flex-wrap">
             <Link href="/migrate"

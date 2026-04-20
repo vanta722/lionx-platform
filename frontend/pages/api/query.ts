@@ -125,11 +125,44 @@ Return a JSON object with exactly these fields:
 Return only the JSON.`,
 }
 
+// Verify a burn transaction actually happened on-chain
+async function verifyBurnTx(txHash: string, expectedAddress: string): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    const res = await fetch(`https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`)
+    const tx  = await res.json()
+
+    if (!tx || tx.contractRet !== 'SUCCESS') return { valid: false, reason: 'Transaction not confirmed' }
+
+    // Must be recent (within 15 minutes)
+    const txAge = Date.now() - tx.timestamp
+    if (txAge > 15 * 60 * 1000) return { valid: false, reason: 'Transaction too old (max 15 min)' }
+
+    // Must be from the claimed address
+    const fromAddr = tx.ownerAddress || tx.contract_map?.[0]?.from
+    if (fromAddr && expectedAddress && fromAddr.toLowerCase() !== expectedAddress.toLowerCase()) {
+      return { valid: false, reason: 'Transaction not from claimed address' }
+    }
+
+    return { valid: true }
+  } catch {
+    // If Tronscan is down, allow the request (fail-open for UX)
+    // TODO: switch to fail-closed once Tronscan reliability is confirmed
+    console.warn('Tronscan verification failed — allowing request')
+    return { valid: true }
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { tool, input, address } = req.body
+  const { tool, input, address, txHash } = req.body
   if (!tool || !input) return res.status(400).json({ error: 'Missing tool or input' })
+
+  // Require proof-of-burn: txHash from the on-chain executeQuery() call
+  if (!txHash) return res.status(403).json({ error: 'Missing txHash — execute query on-chain first' })
+
+  const verification = await verifyBurnTx(txHash, address)
+  if (!verification.valid) return res.status(403).json({ error: `Transaction invalid: ${verification.reason}` })
 
   const promptFn = TOOL_PROMPTS[tool]
   if (!promptFn) return res.status(400).json({ error: 'Unknown tool' })

@@ -1,4 +1,5 @@
 import Head from 'next/head'
+import DOMPurify from 'isomorphic-dompurify'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
@@ -130,7 +131,7 @@ export default function Report() {
           {result?.analysis && (
             <div className="p-5 rounded-xl mb-4" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
               <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#14b8a6' }}>⚡ AI Analysis</div>
-              <p className="text-sm leading-relaxed" style={{ color: '#7a8a9a' }} dangerouslySetInnerHTML={{ __html: result.analysis }}/>
+              <p className="text-sm leading-relaxed" style={{ color: '#7a8a9a' }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.analysis, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['style'] }) }}/>
             </div>
           )}
 

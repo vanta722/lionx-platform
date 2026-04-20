@@ -1,5 +1,6 @@
 import Head from 'next/head'
 import { useState } from 'react'
+import DOMPurify from 'isomorphic-dompurify'
 import Navbar from '../components/Navbar'
 import { useWallet } from '../components/WalletProvider'
 
@@ -45,13 +46,14 @@ export default function Tools() {
       await new Promise(r => setTimeout(r, 4000))
       setRunState('running')
       const plat     = await tw.contract().at(PLATFORM)
-      const toolId   = tw.toHex(tool.id).padEnd(66, '0')
+      // Use keccak256 to match how Platform contract registered the tool
+      const toolId   = tw.sha3(tool.id)
       const queryRef = tw.sha3(input + Date.now())
-      await plat.executeQuery(toolId, queryRef).send({ feeLimit: 300_000_000 })
-      await new Promise(r => setTimeout(r, 4000))
+      const txHash   = await plat.executeQuery(toolId, queryRef).send({ feeLimit: 300_000_000 })
+      await new Promise(r => setTimeout(r, 5000)) // Wait for block confirmation
       const res  = await fetch('/api/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: tool.id, input, address })
+        body: JSON.stringify({ tool: tool.id, input, address, txHash })
       })
       const data = await res.json()
       setResult(data)
@@ -342,7 +344,7 @@ function ResultDisplay({ result }: { result: any }) {
       {result.analysis && (
         <div className="p-4 rounded-xl" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
           <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#14b8a6' }}>⚡ AI Analysis</div>
-          <p className="text-sm leading-relaxed" style={{ color: '#7a8a9a' }} dangerouslySetInnerHTML={{ __html: result.analysis }}/>
+          <p className="text-sm leading-relaxed" style={{ color: '#7a8a9a' }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.analysis, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['style'] }) }}/>
         </div>
       )}
       {result.flags && (

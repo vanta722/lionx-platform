@@ -10,13 +10,14 @@ declare global {
   }
 }
 
-// ── Contract Addresses (update after deployment) ──
+// ── Contract Addresses (update after mainnet deployment) ──
+// Shasta testnet addresses — replace all with mainnet addresses before launch
 export const CONTRACTS = {
-  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1', // Original LDA
-  LDA_V2:    'TFHVBsB3svwQAiFn2D3652b1nn9JFELf3T', // Shasta testnet
-  MIGRATION: 'TSTsQq7mHQ5LZ7axk3J5mBvmwBKYzUYTXQ', // Shasta testnet
-  PLATFORM:  'TMsZ6yTCx9UU3VkfxjwvTT17Bf7B8kRWxW', // Shasta testnet
-  STAKING:   '',   // Set after deployment
+  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1', // Original LDA (mainnet)
+  LDA_V2:    process.env.NEXT_PUBLIC_LDA_V2    || 'TURQgDcWWeg633Azz8SMrDrHHYdgM3Nfxi', // Shasta
+  MIGRATION: process.env.NEXT_PUBLIC_MIGRATION || 'TBJewkqJqCRqurLMiTnqYkRhVxYWeHvrVP', // Shasta
+  PLATFORM:  process.env.NEXT_PUBLIC_PLATFORM  || 'TYKu4AJv6cqNwoyZtnjzpsyE9Tf5WkLQhh', // Shasta
+  STAKING:   '',   // Phase 2
   MANES:     'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
 }
 
@@ -136,7 +137,9 @@ export async function approvePlatform(amount: number): Promise<string> {
  */
 export async function executeQuery(toolId: string, queryRef: string): Promise<string> {
   const contract = await window.tronWeb.contract().at(CONTRACTS.PLATFORM)
-  const toolIdBytes = window.tronWeb.toHex(toolId).padEnd(66, '0')
+  // Use keccak256 hash — must match how the Platform contract registered the tool
+  // LDAPlatform.sol uses: _registerTool(keccak256("WALLET_ANALYZER"), ...)
+  const toolIdBytes = window.tronWeb.sha3(toolId)  // keccak256 hash
   const queryRefBytes = window.tronWeb.sha3(queryRef)
   const tx = await contract.executeQuery(toolIdBytes, queryRefBytes).send()
   return tx

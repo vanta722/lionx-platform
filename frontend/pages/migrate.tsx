@@ -166,7 +166,7 @@ export default function Migrate() {
             {/* Success */}
             {step === 'done' && txHash && (
               <div className="mb-4 p-3 rounded-lg text-sm" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', color: '#22c55e' }}>
-                ✅ Migration complete! <a href={`https://shasta.tronscan.org/#/transaction/${txHash}`} target="_blank" rel="noreferrer" className="underline">View on Tronscan</a>
+                ✅ Migration complete! <a href={`https://tronscan.org/#/transaction/${txHash}`} target="_blank" rel="noreferrer" className="underline">View on Tronscan</a>
               </div>
             )}
 

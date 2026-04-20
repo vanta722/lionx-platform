@@ -16,7 +16,8 @@
     "axios": "^1.6.8",
     "framer-motion": "^11.0.24",
     "zustand": "^4.5.2",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "isomorphic-dompurify": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^20",

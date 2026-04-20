@@ -115,8 +115,24 @@ export default function LionHero() {
     return () => clearInterval(t)
   }, [])
 
+  // ── Mobile: static lightweight version (no canvas) ────────
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col items-center justify-center md:hidden" style={{ height: 220, width: '100%' }}>
+        <div style={{ fontSize: 80, filter: 'drop-shadow(0 0 24px rgba(245,166,35,0.7)) drop-shadow(0 0 48px rgba(20,184,166,0.4))', animation: 'lion-pulse 4s ease-in-out infinite' }}>
+          🦁
+        </div>
+        <div className="mt-3 font-black text-xl tracking-widest" style={{ color: '#f5a623', fontFamily: 'Space Mono, monospace', textShadow: '0 0 20px rgba(245,166,35,0.5)' }}>LION X</div>
+        <div className="mt-1 text-xs font-mono tracking-widest" style={{ color: 'rgba(20,184,166,0.6)' }}>AI PLATFORM · TRON NETWORK</div>
+        <style>{`@keyframes lion-pulse { 0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.05) rotate(2deg)} }`}</style>
+      </div>
+    )
+  }
+
   return (
-    <div className="relative flex items-center justify-center" style={{ height: 440, width: '100%' }}>
+    <div className="relative hidden md:flex items-center justify-center" style={{ height: 440, width: '100%' }}>
 
       {/* Matrix rain background */}
       <canvas ref={matrixRef} className="absolute inset-0 w-full h-full opacity-25 pointer-events-none"/>

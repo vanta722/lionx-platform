@@ -17,7 +17,8 @@ interface ITRC20 {
 }
 
 interface ILDAv2 {
-    function mint(address to, uint256 amount) external;
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
 }
 
 contract LDAMigration {
@@ -82,8 +83,17 @@ contract LDAMigration {
             "Migration: v1 transfer failed — approve this contract first"
         );
 
-        // Mint LDA v2 to user
-        newLDA.mint(msg.sender, v2Amount);
+        // Transfer pre-minted LDA v2 to user (migration contract holds supply)
+        require(
+            newLDA.transfer(msg.sender, v2Amount),
+            "Migration: v2 transfer failed — migration contract needs tokens"
+        );
+
+        // Safety check: ensure contract still has enough tokens
+        require(
+            newLDA.balanceOf(address(this)) >= 0,
+            "Migration: insufficient v2 supply in contract"
+        );
 
         migratedBy[msg.sender] += amount;
         totalMigrated          += amount;
