@@ -2,52 +2,69 @@
 pragma solidity ^0.8.19;
 
 /**
- * LDA Platform Contract
+ * LDA Platform Contract — v1 Token Compatible
  *
- * The middleware between users and the AI backend.
- * Handles:
- *   - Tool registration & pricing
- *   - burnFrom() calls on LDA v2
- *   - Tier-based discounts
- *   - Usage tracking per wallet
- *   - Query nonce (prevents replay)
+ * Works with the existing LDA v1 TRC-20 token (no new token required).
+ *
+ * Query flow:
+ *   1. User approves this contract to spend their LDA
+ *   2. User calls executeQuery(toolId, queryRef)
+ *   3. Contract pulls tokens via transferFrom()
+ *   4. 70% sent to burnWallet (locked/dead address — removed from circulation)
+ *   5. 30% sent to treasury (platform revenue)
+ *   6. QueryExecuted event emitted → AI backend serves result
+ *
+ * Tier system based on LDA v1 balance held:
+ *   Bronze:  500+  LDA
+ *   Silver:  2,000+ LDA
+ *   Gold:    10,000+ LDA
  */
 
-interface ILDAv2 {
-    enum Tier { None, Bronze, Silver, Gold }
-    function burnFrom(address account, uint256 amount, bytes32 toolId) external;
-    function getTier(address account) external view returns (Tier);
+interface ITRC20 {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 }
 
 contract LDAPlatform {
 
     address public owner;
-    ILDAv2  public ldaToken;
+    ITRC20  public ldaToken;       // LDA v1 token
+    address public treasury;       // receives 30% of every query
+    address public burnWallet;     // receives 70% — locked/provably dead address
+
+    // ── Token decimals (LDA v1 uses 6 decimals) ──
+    uint256 public constant DECIMALS = 6;
+
+    // ── Burn / Treasury Split ──
+    uint256 public burnPercent     = 70;
+    uint256 public treasuryPercent = 30;
+
+    // ── Tier Thresholds (LDA v1 balance) ──
+    uint256 public bronzeThreshold = 500   * 10**DECIMALS;
+    uint256 public silverThreshold = 2_000 * 10**DECIMALS;
+    uint256 public goldThreshold   = 10_000 * 10**DECIMALS;
+
+    // ── Tier Discounts (basis points — 100 = 1%) ──
+    uint256 public bronzeDiscount = 500;   // 5%
+    uint256 public silverDiscount = 1000;  // 10%
+    uint256 public goldDiscount   = 2000;  // 20%
 
     // ── Tool Registry ──
     struct Tool {
         bytes32 id;
         string  name;
-        uint256 baseCost;    // LDA v2 with 6 decimals
+        uint256 baseCost;
         bool    active;
         uint256 totalQueries;
     }
-
     mapping(bytes32 => Tool) public tools;
     bytes32[] public toolIds;
 
-    // ── Tier Discounts ──
-    // Discount in basis points (100 = 1%)
-    uint256 public bronzeDiscount = 500;  // 5%
-    uint256 public silverDiscount = 1000; // 10%
-    uint256 public goldDiscount   = 2000; // 20%
-
     // ── Usage Tracking ──
     mapping(address => uint256) public queriesRun;
-    mapping(address => uint256) public totalBurnedBy;
-
-    // ── Query Nonce ── (prevents replay attacks)
+    mapping(address => uint256) public totalSpentBy;
     mapping(address => uint256) public nonce;
 
     // ── Subscription ──
@@ -58,81 +75,115 @@ contract LDAPlatform {
         uint256 dayStart;
     }
     mapping(address => Subscription) public subscriptions;
-    uint256 public monthlySubCost = 500 * 10**6; // 500 LDA v2/month
+    uint256 public monthlySubCost = 500 * 10**DECIMALS;
+
+    // ── Pause ──
+    bool public paused;
 
     // ── Events ──
     event QueryExecuted(
         address indexed user,
         bytes32 indexed toolId,
         uint256 cost,
-        uint256 actualBurn,
-        uint256 nonce
+        uint256 burnAmount,
+        uint256 treasuryAmount,
+        uint256 queryNonce
     );
     event ToolRegistered(bytes32 indexed toolId, string name, uint256 cost);
     event ToolUpdated(bytes32 indexed toolId, uint256 newCost, bool active);
     event SubscriptionPurchased(address indexed user, uint256 expiresAt);
+    event BurnSplitUpdated(uint256 burnPct, uint256 treasuryPct);
 
-    modifier onlyOwner() { require(msg.sender == owner, "Not owner"); _; }
+    modifier onlyOwner()    { require(msg.sender == owner, "Not owner"); _; }
+    modifier whenNotPaused(){ require(!paused, "Platform paused"); _; }
 
-    constructor(address _ldaToken) {
-        owner    = msg.sender;
-        ldaToken = ILDAv2(_ldaToken);
+    constructor(
+        address _ldaToken,
+        address _treasury,
+        address _burnWallet
+    ) {
+        require(_ldaToken   != address(0), "Zero token");
+        require(_treasury   != address(0), "Zero treasury");
+        require(_burnWallet != address(0), "Zero burn wallet");
 
-        // Register default tools
-        _registerTool(keccak256("WALLET_ANALYZER"),   "Wallet Analyzer",   50  * 10**6);
-        _registerTool(keccak256("CONTRACT_AUDITOR"),  "Contract Auditor",  100 * 10**6);
-        _registerTool(keccak256("MARKET_INTEL"),      "Market Intelligence", 25 * 10**6);
+        owner      = msg.sender;
+        ldaToken   = ITRC20(_ldaToken);
+        treasury   = _treasury;
+        burnWallet = _burnWallet;
+
+        // Register launch tools
+        _registerTool(keccak256("WALLET_ANALYZER"),  "Wallet Analyzer",     50  * 10**DECIMALS);
+        _registerTool(keccak256("CONTRACT_AUDITOR"), "Contract Auditor",    100 * 10**DECIMALS);
+        _registerTool(keccak256("MARKET_INTEL"),     "Market Intelligence",  25 * 10**DECIMALS);
     }
 
+    // ─── Execute Query ─────────────────────────────────────────
+
     /**
-     * @dev Execute an AI query — burns LDA v2 and emits event for backend.
-     * Backend listens for QueryExecuted events to serve AI responses.
-     *
-     * @param toolId   Registered tool identifier
+     * @dev Pay for an AI query with LDA v1 tokens.
+     * User must approve this contract first.
+     * 70% goes to burnWallet (out of circulation), 30% to treasury.
+     * Emits QueryExecuted → AI backend serves result.
      */
-    function executeQuery(bytes32 toolId, bytes32 /* queryRef */) external {
+    function executeQuery(bytes32 toolId, bytes32 queryRef) external whenNotPaused {
         Tool storage tool = tools[toolId];
         require(tool.active, "Tool not active");
 
         uint256 cost = getDiscountedCost(msg.sender, toolId);
 
-        // Check subscription — subscribers get daily allowance
+        // Subscription: 50% off + daily allowance
         if (_hasActiveSubscription(msg.sender)) {
             Subscription storage sub = subscriptions[msg.sender];
-            // Reset daily counter if new day
             if (block.timestamp >= sub.dayStart + 1 days) {
                 sub.queriesUsedToday = 0;
                 sub.dayStart         = block.timestamp;
             }
             if (sub.queriesUsedToday < sub.dailyQueries) {
                 sub.queriesUsedToday++;
-                // Subscribers pay 50% of normal cost
                 cost = cost / 2;
             }
         }
 
-        uint256 userNonce = nonce[msg.sender]++;
+        uint256 burnAmount     = (cost * burnPercent)     / 100;
+        uint256 treasuryAmount = (cost * treasuryPercent) / 100;
+        // Handle rounding — send any remainder to treasury
+        uint256 remainder = cost - burnAmount - treasuryAmount;
+        treasuryAmount   += remainder;
 
-        // Burn — requires prior approval from user
-        ldaToken.burnFrom(msg.sender, cost, toolId);
+        uint256 queryNonce = nonce[msg.sender]++;
+
+        // Pull tokens from user
+        require(
+            ldaToken.transferFrom(msg.sender, address(this), cost),
+            "Platform: transfer failed - approve this contract first"
+        );
+
+        // Split: burn portion → burnWallet, treasury portion → treasury
+        require(ldaToken.transfer(burnWallet, burnAmount),     "Platform: burn transfer failed");
+        require(ldaToken.transfer(treasury,   treasuryAmount), "Platform: treasury transfer failed");
 
         // Track usage
-        queriesRun[msg.sender]    += 1;
-        totalBurnedBy[msg.sender] += cost;
-        tool.totalQueries         += 1;
+        queriesRun[msg.sender]   += 1;
+        totalSpentBy[msg.sender] += cost;
+        tool.totalQueries        += 1;
 
-        emit QueryExecuted(msg.sender, toolId, cost, (cost * 70) / 100, userNonce);
+        emit QueryExecuted(msg.sender, toolId, cost, burnAmount, treasuryAmount, queryNonce);
     }
 
-    /**
-     * @dev Purchase a monthly subscription.
-     * Cost: 500 LDA v2/month. Gives 50% discount + 100 queries/day.
-     */
-    function purchaseSubscription() external {
-        ldaToken.burnFrom(msg.sender, monthlySubCost, keccak256("SUBSCRIPTION"));
+    // ─── Subscription ──────────────────────────────────────────
+
+    function purchaseSubscription() external whenNotPaused {
+        uint256 burnAmt     = (monthlySubCost * burnPercent)     / 100;
+        uint256 treasuryAmt = (monthlySubCost * treasuryPercent) / 100;
+        uint256 remainder   = monthlySubCost - burnAmt - treasuryAmt;
+        treasuryAmt        += remainder;
+
+        require(ldaToken.transferFrom(msg.sender, address(this), monthlySubCost), "Transfer failed");
+        require(ldaToken.transfer(burnWallet, burnAmt),    "Burn transfer failed");
+        require(ldaToken.transfer(treasury,   treasuryAmt),"Treasury transfer failed");
 
         Subscription storage sub = subscriptions[msg.sender];
-        uint256 start = sub.expiresAt > block.timestamp ? sub.expiresAt : block.timestamp;
+        uint256 start      = sub.expiresAt > block.timestamp ? sub.expiresAt : block.timestamp;
         sub.expiresAt      = start + 30 days;
         sub.dailyQueries   = 100;
         sub.queriesUsedToday = 0;
@@ -141,19 +192,31 @@ contract LDAPlatform {
         emit SubscriptionPurchased(msg.sender, sub.expiresAt);
     }
 
-    // ── View Helpers ──
+    // ─── Tier System ───────────────────────────────────────────
+
+    enum Tier { None, Bronze, Silver, Gold }
+
+    function getTier(address user) public view returns (Tier) {
+        uint256 bal = ldaToken.balanceOf(user);
+        if (bal >= goldThreshold)   return Tier.Gold;
+        if (bal >= silverThreshold) return Tier.Silver;
+        if (bal >= bronzeThreshold) return Tier.Bronze;
+        return Tier.None;
+    }
 
     function getDiscountedCost(address user, bytes32 toolId) public view returns (uint256) {
         uint256 base = tools[toolId].baseCost;
-        ILDAv2.Tier tier = ldaToken.getTier(user);
+        Tier    tier = getTier(user);
 
         uint256 discountBps;
-        if      (tier == ILDAv2.Tier.Gold)   discountBps = goldDiscount;
-        else if (tier == ILDAv2.Tier.Silver)  discountBps = silverDiscount;
-        else if (tier == ILDAv2.Tier.Bronze)  discountBps = bronzeDiscount;
+        if      (tier == Tier.Gold)   discountBps = goldDiscount;
+        else if (tier == Tier.Silver) discountBps = silverDiscount;
+        else if (tier == Tier.Bronze) discountBps = bronzeDiscount;
 
         return base - (base * discountBps / 10000);
     }
+
+    // ─── View Helpers ──────────────────────────────────────────
 
     function getAllTools() external view returns (Tool[] memory) {
         Tool[] memory result = new Tool[](toolIds.length);
@@ -165,17 +228,17 @@ contract LDAPlatform {
 
     function getUserStats(address user) external view returns (
         uint256 queries,
-        uint256 burned,
+        uint256 spent,
         uint256 userNonce,
-        ILDAv2.Tier tier,
-        bool    hasSubscription,
+        Tier    tier,
+        bool    hasSub,
         uint256 subExpiry
     ) {
         return (
             queriesRun[user],
-            totalBurnedBy[user],
+            totalSpentBy[user],
             nonce[user],
-            ldaToken.getTier(user),
+            getTier(user),
             _hasActiveSubscription(user),
             subscriptions[user].expiresAt
         );
@@ -185,9 +248,11 @@ contract LDAPlatform {
         return subscriptions[user].expiresAt > block.timestamp;
     }
 
-    // ── Admin ──
+    // ─── Admin ─────────────────────────────────────────────────
 
-    function registerTool(bytes32 toolId, string calldata name_, uint256 cost) external onlyOwner {
+    function registerTool(bytes32 toolId, string calldata name_, uint256 cost)
+        external onlyOwner
+    {
         _registerTool(toolId, name_, cost);
     }
 
@@ -198,23 +263,48 @@ contract LDAPlatform {
         emit ToolRegistered(toolId, name_, cost);
     }
 
-    function updateTool(bytes32 toolId, uint256 newCost, bool active) external onlyOwner {
+    function updateTool(bytes32 toolId, uint256 newCost, bool active_) external onlyOwner {
         tools[toolId].baseCost = newCost;
-        tools[toolId].active   = active;
-        emit ToolUpdated(toolId, newCost, active);
+        tools[toolId].active   = active_;
+        emit ToolUpdated(toolId, newCost, active_);
+    }
+
+    function setTreasury(address newTreasury) external onlyOwner {
+        require(newTreasury != address(0), "Zero address");
+        treasury = newTreasury;
+    }
+
+    function setBurnWallet(address newBurnWallet) external onlyOwner {
+        require(newBurnWallet != address(0), "Zero address");
+        burnWallet = newBurnWallet;
+    }
+
+    function setBurnSplit(uint256 _burnPct, uint256 _treasuryPct) external onlyOwner {
+        require(_burnPct + _treasuryPct == 100, "Must sum to 100");
+        require(_burnPct >= 50 && _burnPct <= 90, "Burn 50-90% only");
+        burnPercent     = _burnPct;
+        treasuryPercent = _treasuryPct;
+        emit BurnSplitUpdated(_burnPct, _treasuryPct);
     }
 
     function setDiscounts(uint256 bronze, uint256 silver, uint256 gold) external onlyOwner {
-        require(bronze < silver && silver < gold, "Invalid discounts");
+        require(bronze < silver && silver < gold, "Invalid order");
         require(gold <= 5000, "Max 50% discount");
         bronzeDiscount = bronze;
         silverDiscount = silver;
         goldDiscount   = gold;
     }
 
-    function setSubCost(uint256 cost) external onlyOwner {
-        monthlySubCost = cost;
+    function setTierThresholds(uint256 bronze, uint256 silver, uint256 gold) external onlyOwner {
+        require(bronze < silver && silver < gold, "Invalid thresholds");
+        bronzeThreshold = bronze;
+        silverThreshold = silver;
+        goldThreshold   = gold;
     }
+
+    function setSubCost(uint256 cost) external onlyOwner { monthlySubCost = cost; }
+    function pause()   external onlyOwner { paused = true; }
+    function unpause() external onlyOwner { paused = false; }
 
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Zero address");

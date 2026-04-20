@@ -10,13 +10,14 @@ declare global {
   }
 }
 
-// ── Contract Addresses (update after mainnet deployment) ──
-// Shasta testnet addresses — replace all with mainnet addresses before launch
+// ── Contract Addresses ──
+// Platform now uses existing LDA v1 token directly — no new token needed.
+// Only ONE contract to deploy: LDAPlatform.sol
 export const CONTRACTS = {
-  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1', // Original LDA (mainnet)
-  LDA_V2:    process.env.NEXT_PUBLIC_LDA_V2    || 'TURQgDcWWeg633Azz8SMrDrHHYdgM3Nfxi', // Shasta
-  MIGRATION: process.env.NEXT_PUBLIC_MIGRATION || 'TBJewkqJqCRqurLMiTnqYkRhVxYWeHvrVP', // Shasta
-  PLATFORM:  process.env.NEXT_PUBLIC_PLATFORM  || 'TYKu4AJv6cqNwoyZtnjzpsyE9Tf5WkLQhh', // Shasta
+  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',                                  // LDA v1 mainnet (the token users hold NOW)
+  LDA_V2:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',                                  // alias — same token for platform use
+  PLATFORM:  process.env.NEXT_PUBLIC_PLATFORM || 'TQMc3D4Q6WAZmDuDj5ySZ4dMNKd87rgVPD', // Shasta testnet
+  MIGRATION: '',   // not needed — using LDA v1 directly
   STAKING:   '',   // Phase 2
   MANES:     'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
 }
