@@ -154,7 +154,7 @@ export default function LionHero() {
         ))}
       </div>
       <div className="absolute top-5 right-10 text-right transition-all duration-1000" style={{ opacity: loaded ? 1 : 0 }}>
-        {['SUPPLY: 10,000,000', 'BURN: 70% PER TX', 'STATUS: LIVE'].map((l, i) => (
+        {['SUPPLY: 20,207,717', 'BURN: 70% PER TX', 'STATUS: LIVE'].map((l, i) => (
           <div key={l} className="font-mono text-xs mb-0.5" style={{ color: '#f5a623', opacity: 0.6 }}>{l}</div>
         ))}
       </div>
