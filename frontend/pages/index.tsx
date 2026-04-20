@@ -12,8 +12,10 @@ const PHRASES = [
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [typeText, setTypeText] = useState('')
-  const [countdown, setCountdown] = useState('30d 00h 00m 00s')
+  const [typeText, setTypeText]     = useState('')
+  const [countdown, setCountdown]   = useState('30d 00h 00m 00s')
+  const [totalBurned, setTotalBurned] = useState(0)
+  const [displayBurned, setDisplayBurned] = useState(0)
 
   // Particle canvas
   useEffect(() => {
@@ -91,11 +93,48 @@ export default function Home() {
     return () => clearInterval(t)
   }, [])
 
+  // Fetch real burned supply + animate counter
+  const LDA_V2_ADDR = process.env.NEXT_PUBLIC_LDA_V2 || 'TURQgDcWWeg633Azz8SMrDrHHYdgM3Nfxi'
+  useEffect(() => {
+    async function fetchBurned() {
+      try {
+        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_V2_ADDR}`)
+        const data = await res.json()
+        const token = data?.trc20_tokens?.[0]
+        if (token) {
+          const issued  = Number(token.total_supply_with_decimals || 0) / 1e6
+          const burned  = Math.max(0, 10_000_000 - issued)
+          setTotalBurned(burned)
+        }
+      } catch { /* silent */ }
+    }
+    fetchBurned()
+    const t = setInterval(fetchBurned, 30000)
+    return () => clearInterval(t)
+  }, [LDA_V2_ADDR])
+
+  // Animate counter up
+  useEffect(() => {
+    if (totalBurned === 0) return
+    let start = displayBurned
+    const end = totalBurned
+    const duration = 1500
+    const startTime = performance.now()
+    const step = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplayBurned(Math.floor(start + (end - start) * eased))
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalBurned])
+
   const stats = [
     { val: '20,207,717', label: 'Old LDA Supply' },
     { val: '10,000,000', label: 'LDA v2 Max Supply' },
     { val: '281',        label: 'Existing Holders' },
-    { val: '0',          label: 'Tokens Burned' },
+    { val: displayBurned > 0 ? displayBurned.toLocaleString() : '0', label: 'Tokens Burned', live: true, fire: true },
     { val: countdown,    label: 'Migration Window', live: true },
   ]
 
@@ -196,7 +235,8 @@ export default function Home() {
               {s.val}
             </div>
             <div className="text-xs uppercase tracking-wider mt-1" style={{ color: '#4a5a6a' }}>{s.label}</div>
-            {s.live && <div className="flex items-center justify-center gap-1.5 mt-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'breathe 1.5s infinite' }}/><span className="text-xs font-bold" style={{ color: '#22c55e' }}>Live</span></div>}
+            {s.live && !('fire' in s) && <div className="flex items-center justify-center gap-1.5 mt-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'breathe 1.5s infinite' }}/><span className="text-xs font-bold" style={{ color: '#22c55e' }}>Live</span></div>}
+            {'fire' in s && <div className="flex items-center justify-center gap-1.5 mt-1"><span style={{ fontSize:12, animation:'breathe 1s infinite' }}>🔥</span><span className="text-xs font-bold" style={{ color: '#ef4444' }}>Burning</span></div>}
           </div>
         ))}
       </div>

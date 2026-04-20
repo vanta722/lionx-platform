@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { useWallet } from './WalletProvider'
+import ActivityTicker from './ActivityTicker'
 
 const TIER_LABEL = ['', 'Bronze', 'Silver', 'Gold']
 const TIER_COLOR = ['', '#cd7f32', '#c0c0c0', '#f5a623']
@@ -107,6 +108,10 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      {/* Activity Ticker — below navbar */}
+      <div style={{ position:'fixed', top:56, left:0, right:0, zIndex:40 }}>
+        <ActivityTicker />
+      </div>
     </>
   )
 }
