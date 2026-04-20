@@ -2,132 +2,205 @@ import Head from 'next/head'
 import { useEffect, useState, useRef } from 'react'
 import Navbar from '../components/Navbar'
 import { useWallet } from '../components/WalletProvider'
+import Link from 'next/link'
 
-interface BurnEvent {
-  id: string
-  wallet: string
-  tool: string
-  amount: number
-  burned: number
-  time: string
-  ago: number
+// ── Contract addresses ──────────────────────────────────────────
+const LDA_V2_ADDR   = process.env.NEXT_PUBLIC_LDA_V2    || ''
+const MIGRATION_ADDR = process.env.NEXT_PUBLIC_MIGRATION || ''
+const TREASURY_ADDR  = process.env.NEXT_PUBLIC_LDA_V1   || '' // treasury wallet
+const OLD_LDA_SUPPLY = 20_207_717 // real old LDA max supply
+const MAX_V2_SUPPLY  = 10_000_000 // hard cap
+const MIGRATION_RATIO = 2          // 2 old LDA → 1 LDA v2
+
+interface LiveStats {
+  // Migration stats
+  migrationOpen:      boolean
+  timeRemaining:      number   // seconds
+  oldLDAMigrated:     number   // old LDA sent in
+  v2Issued:           number   // LDA v2 created via migration
+  oldLDARemaining:    number   // old LDA not yet migrated
+  maxAdditionalV2:    number   // max more v2 possible from remaining old LDA
+  // Token stats
+  v2TotalSupply:      number   // total LDA v2 minted so far
+  v2TotalBurned:      number   // total burned by platform
+  v2Circulating:      number   // v2TotalSupply - v2TotalBurned
+  treasuryBalance:    number   // treasury wallet LDA v2 holdings
+  // Platform stats
+  holders:            number
+  burnRate24h:        number   // LDA v2 burned in last 24h (approx)
+  // Derived
+  migrationPct:       number   // % of old LDA migrated
+  burnPct:            number   // % of issued v2 that has been burned
+  supplyCreatedPct:   number   // % of max 10M that exists
 }
 
-interface TokenStats {
-  totalSupply: number
-  totalBurned: number
-  circulatingSupply: number
-  holders: number
-  treasuryBalance: number
-  burnRate24h: number
-  queryCount: number
+const DEFAULT_STATS: LiveStats = {
+  migrationOpen: true, timeRemaining: 30 * 86400,
+  oldLDAMigrated: 0, v2Issued: 0,
+  oldLDARemaining: OLD_LDA_SUPPLY, maxAdditionalV2: MAX_V2_SUPPLY,
+  v2TotalSupply: 0, v2TotalBurned: 0, v2Circulating: 0,
+  treasuryBalance: 0, holders: 281, burnRate24h: 0,
+  migrationPct: 0, burnPct: 0, supplyCreatedPct: 0,
+}
+
+interface BurnEvent {
+  id: string; wallet: string; tool: string; amount: number; burned: number; time: string
 }
 
 const TOOL_NAMES: Record<string, string> = {
-  WALLET_ANALYZER:  '🔍 Wallet Analyzer',
+  WALLET_ANALYZER: '🔍 Wallet Analyzer',
   CONTRACT_AUDITOR: '🛡️ Contract Auditor',
-  MARKET_INTEL:     '📊 Market Intel',
+  MARKET_INTEL: '📊 Market Intel',
 }
 
-// Simulated burn feed (replaced by real Tronscan events post-mainnet)
-const MOCK_BURNS: BurnEvent[] = [
-  { id: '1', wallet: 'TXk9...a4F2', tool: 'WALLET_ANALYZER',  amount: 50,  burned: 35,  time: '2m ago',  ago: 2  },
-  { id: '2', wallet: 'TRm4...c8D1', tool: 'CONTRACT_AUDITOR', amount: 100, burned: 70,  time: '5m ago',  ago: 5  },
-  { id: '3', wallet: 'TWz2...f9B3', tool: 'MARKET_INTEL',     amount: 25,  burned: 17,  time: '9m ago',  ago: 9  },
-  { id: '4', wallet: 'TKp7...e2A0', tool: 'WALLET_ANALYZER',  amount: 50,  burned: 35,  time: '14m ago', ago: 14 },
-  { id: '5', wallet: 'TNq3...d5C6', tool: 'CONTRACT_AUDITOR', amount: 100, burned: 70,  time: '18m ago', ago: 18 },
-  { id: '6', wallet: 'TLs8...b7E4', tool: 'MARKET_INTEL',     amount: 25,  burned: 17,  time: '23m ago', ago: 23 },
-  { id: '7', wallet: 'TMv1...a3F7', tool: 'WALLET_ANALYZER',  amount: 50,  burned: 35,  time: '31m ago', ago: 31 },
-  { id: '8', wallet: 'TJw5...c9G2', tool: 'CONTRACT_AUDITOR', amount: 100, burned: 70,  time: '38m ago', ago: 38 },
-]
-
-function MiniChart({ data, color }: { data: number[], color: string }) {
+function MiniChart({ data, color, label }: { data: number[], color: string, label?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const c = ref.current; if (!c) return
     const ctx = c.getContext('2d')!
-    const W = c.width = c.offsetWidth
-    const H = c.height = c.offsetHeight
-    const max = Math.max(...data), min = Math.min(...data)
+    const W = c.width = c.offsetWidth, H = c.height = c.offsetHeight
+    const max = Math.max(...data, 1), min = Math.min(...data)
     const range = max - min || 1
-    const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * W, y: H - ((v - min) / range) * (H - 8) - 4 }))
+    const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * W, y: H - ((v - min) / range) * (H - 10) - 5 }))
     ctx.clearRect(0, 0, W, H)
-    // Fill
     const grad = ctx.createLinearGradient(0, 0, 0, H)
-    grad.addColorStop(0, color + '40')
-    grad.addColorStop(1, color + '00')
-    ctx.beginPath()
-    ctx.moveTo(pts[0].x, H)
+    grad.addColorStop(0, color + '40'); grad.addColorStop(1, color + '00')
+    ctx.beginPath(); ctx.moveTo(pts[0].x, H)
     pts.forEach(p => ctx.lineTo(p.x, p.y))
-    ctx.lineTo(pts[pts.length-1].x, H)
-    ctx.closePath()
-    ctx.fillStyle = grad
-    ctx.fill()
-    // Line
+    ctx.lineTo(pts[pts.length-1].x, H); ctx.closePath()
+    ctx.fillStyle = grad; ctx.fill()
     ctx.beginPath()
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y))
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2
-    ctx.stroke()
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke()
   }, [data, color])
-  return <canvas ref={ref} className="w-full h-full"/>
+  return <canvas ref={ref} className="w-full" style={{ height: 60 }}/>
+}
+
+function Countdown({ seconds }: { seconds: number }) {
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  const unit = (v: number, l: string) => (
+    <div className="text-center">
+      <div className="font-black text-2xl font-mono" style={{ color: seconds < 86400 ? '#ef4444' : '#f5a623' }}>
+        {String(v).padStart(2,'0')}
+      </div>
+      <div className="text-xs" style={{ color: '#4a5a6a' }}>{l}</div>
+    </div>
+  )
+  return (
+    <div className="flex gap-3 items-center">
+      {unit(d,'Days')}<span style={{color:'#4a5a6a',fontSize:18,fontWeight:'bold'}}>:</span>
+      {unit(h,'Hrs')}<span style={{color:'#4a5a6a',fontSize:18,fontWeight:'bold'}}>:</span>
+      {unit(m,'Min')}<span style={{color:'#4a5a6a',fontSize:18,fontWeight:'bold'}}>:</span>
+      {unit(s,'Sec')}
+    </div>
+  )
 }
 
 export default function Dashboard() {
   const { address, balance, connected } = useWallet()
-  const [stats,  setStats]  = useState<TokenStats>({
-    totalSupply: 10_000_000, totalBurned: 0, circulatingSupply: 10_000_000,
-    holders: 281, treasuryBalance: 0, burnRate24h: 0, queryCount: 0,
-  })
-  const [burns,   setBurns]   = useState<BurnEvent[]>(MOCK_BURNS)
+  const [stats,   setStats]   = useState<LiveStats>(DEFAULT_STATS)
+  const [burns,   setBurns]   = useState<BurnEvent[]>([])
   const [newBurn, setNewBurn] = useState(false)
-  const [burnHistory] = useState([0, 12, 45, 120, 203, 350, 487, 620, 890, 1240, 1580, 2100])
-  const [queryHistory] = useState([0, 5, 18, 44, 78, 120, 168, 220, 290, 380, 470, 590])
+  const [tick,    setTick]    = useState(0)
+  const [burnHistory,  setBurnHistory]  = useState([0,0,0,0,0,0,0,0,0,0,0,0])
+  const [issueHistory, setIssueHistory] = useState([0,0,0,0,0,0,0,0,0,0,0,0])
 
-  const LDA_V2    = process.env.NEXT_PUBLIC_LDA_V2   || ''
-  const TREASURY  = process.env.NEXT_PUBLIC_LDA_V1   || ''
+  // ── Fetch live contract data ──────────────────────────────────
+  async function fetchLiveStats() {
+    try {
+      const tw = (window as any).tronWeb
+      if (!tw || !LDA_V2_ADDR || !MIGRATION_ADDR) return
 
-  // Fetch real stats
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        if (!LDA_V2) return
-        const res  = await fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_V2}`)
-        const data = await res.json()
-        const token = data?.trc20_tokens?.[0]
-        if (token) {
-          const supply = Number(token.total_supply_with_decimals) / 1e6
-          setStats(s => ({ ...s, circulatingSupply: supply, holders: token.holders_count || s.holders }))
-        }
-      } catch {}
-    }
-    fetchStats()
-    const interval = setInterval(fetchStats, 30000)
-    return () => clearInterval(interval)
-  }, [LDA_V2])
+      const [ldaContract, migContract] = await Promise.all([
+        tw.contract().at(LDA_V2_ADDR),
+        tw.contract().at(MIGRATION_ADDR),
+      ])
 
-  // Simulate incoming burns
-  useEffect(() => {
-    const tools = ['WALLET_ANALYZER', 'CONTRACT_AUDITOR', 'MARKET_INTEL']
-    const costs = { WALLET_ANALYZER: 50, CONTRACT_AUDITOR: 100, MARKET_INTEL: 25 }
-    const addrs = ['TXk9', 'TRm4', 'TWz2', 'TKp7', 'TNq3', 'TLs8', 'TMv1', 'TBc3', 'TSd9']
+      const [supply, burned, migStats, holders] = await Promise.all([
+        ldaContract.totalSupply().call(),
+        ldaContract.totalBurned().call(),
+        migContract.stats().call(),
+        // Fallback to Tronscan for holders
+        fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${LDA_V2_ADDR}`)
+          .then(r => r.json()).then(d => d?.trc20_tokens?.[0]?.holders_count || 281),
+      ])
 
-    const t = setInterval(() => {
-      const tool   = tools[Math.floor(Math.random() * tools.length)]
-      const amount = costs[tool as keyof typeof costs]
-      const wallet = addrs[Math.floor(Math.random() * addrs.length)] + '...' + Math.random().toString(36).slice(2,6).toUpperCase()
-      const newEvent: BurnEvent = {
-        id: Date.now().toString(), wallet, tool, amount, burned: Math.floor(amount * .7), time: 'Just now', ago: 0
+      const v2Supply   = Number(supply) / 1e6
+      const v2Burned   = Number(burned) / 1e6
+      const v2Circulating = v2Supply - v2Burned
+      const oldMigrated   = Number(migStats[2]) / 1e6
+      const v2Issued      = Number(migStats[3]) / 1e6
+      const timeRemaining = Number(migStats[4])
+
+      const treasuryBal = TREASURY_ADDR
+        ? Number(await ldaContract.balanceOf(TREASURY_ADDR).call()) / 1e6
+        : 0
+
+      const s: LiveStats = {
+        migrationOpen:    migStats[0],
+        timeRemaining,
+        oldLDAMigrated:   oldMigrated,
+        v2Issued,
+        oldLDARemaining:  OLD_LDA_SUPPLY - oldMigrated,
+        maxAdditionalV2:  (OLD_LDA_SUPPLY - oldMigrated) / MIGRATION_RATIO,
+        v2TotalSupply:    v2Supply,
+        v2TotalBurned:    v2Burned,
+        v2Circulating,
+        treasuryBalance:  treasuryBal,
+        holders:          Number(holders),
+        burnRate24h:      v2Burned,  // cumulative for now
+        migrationPct:     (oldMigrated / OLD_LDA_SUPPLY) * 100,
+        burnPct:          v2Issued > 0 ? (v2Burned / v2Issued) * 100 : 0,
+        supplyCreatedPct: (v2Issued / MAX_V2_SUPPLY) * 100,
       }
-      setBurns(b => [newEvent, ...b.slice(0, 19)])
-      setStats(s => ({ ...s, totalBurned: s.totalBurned + Math.floor(amount*.7), queryCount: s.queryCount + 1, burnRate24h: s.burnRate24h + Math.floor(amount*.7) }))
-      setNewBurn(true)
-      setTimeout(() => setNewBurn(false), 1000)
-    }, 8000)
+
+      setStats(s)
+      setBurnHistory(h => [...h.slice(1), v2Burned])
+      setIssueHistory(h => [...h.slice(1), v2Issued])
+    } catch (e) {
+      // TronLink not connected — show defaults
+    }
+  }
+
+  useEffect(() => {
+    fetchLiveStats()
+    const interval = setInterval(fetchLiveStats, 15000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // ── Live countdown ────────────────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => {
+      setStats(s => ({ ...s, timeRemaining: Math.max(0, s.timeRemaining - 1) }))
+      setTick(n => n + 1)
+    }, 1000)
     return () => clearInterval(t)
   }, [])
 
-  const burnPct = ((stats.totalBurned / stats.totalSupply) * 100).toFixed(3)
+  // ── Simulated burn events (replaced by real events post-mainnet) ──
+  useEffect(() => {
+    const tools  = ['WALLET_ANALYZER','CONTRACT_AUDITOR','MARKET_INTEL']
+    const costs  = { WALLET_ANALYZER:50, CONTRACT_AUDITOR:100, MARKET_INTEL:25 }
+    const addrs  = ['TXk9','TRm4','TWz2','TKp7','TNq3','TLs8','TMv1','TBc3','TSd9']
+    const t = setInterval(() => {
+      const tool   = tools[Math.floor(Math.random()*tools.length)]
+      const amount = costs[tool as keyof typeof costs]
+      const event: BurnEvent = {
+        id: Date.now().toString(),
+        wallet: addrs[Math.floor(Math.random()*addrs.length)] + '...' + Math.random().toString(36).slice(2,6).toUpperCase(),
+        tool, amount, burned: Math.floor(amount*.7), time: 'Just now'
+      }
+      setBurns(b => [event, ...b.slice(0,19)])
+      setNewBurn(true)
+      setTimeout(() => setNewBurn(false), 800)
+    }, 10000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fmtNum = (n: number, dec = 0) => n.toLocaleString(undefined, { maximumFractionDigits: dec })
 
   return (
     <>
@@ -140,103 +213,165 @@ export default function Dashboard() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: '#14b8a6' }}>Platform Dashboard</p>
-              <h1 className="font-black text-3xl tracking-tight">LDA v2 Live Stats</h1>
+              <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: '#14b8a6' }}>Live Platform Dashboard</p>
+              <h1 className="font-black text-3xl tracking-tight">LDA v2 Token Stats</h1>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: '#0e0e22', border: '1px solid rgba(20,184,166,0.15)' }}>
               <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e', boxShadow: '0 0 8px #22c55e', animation: 'breathe 1.5s infinite' }}/>
-              <span className="text-xs font-bold" style={{ color: '#22c55e' }}>Live · Updates every 30s</span>
+              <span className="text-xs font-bold" style={{ color: '#22c55e' }}>Live · Pulls from Tron every 15s</span>
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {/* ── MIGRATION BANNER ── */}
+          <div className="relative rounded-2xl p-6 mb-6 overflow-hidden" style={{ background: '#0a0a16', border: `1px solid ${stats.migrationOpen ? 'rgba(245,166,35,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+            <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: stats.migrationOpen ? 'linear-gradient(90deg,#f5a623,#14b8a6,#f5a623)' : '#ef4444', backgroundSize:'200% 100%', animation:'shimmer 3s linear infinite' }}/>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: stats.migrationOpen ? '#f5a623' : '#ef4444', boxShadow: `0 0 8px ${stats.migrationOpen ? '#f5a623' : '#ef4444'}`, animation: 'breathe 1.5s infinite' }}/>
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: stats.migrationOpen ? '#f5a623' : '#ef4444' }}>
+                    Migration Window {stats.migrationOpen ? 'OPEN' : 'CLOSED'}
+                  </span>
+                </div>
+                <div className="font-black text-xl mb-1">Swap Old LDA → LDA v2 · 2:1 Ratio</div>
+                <div className="text-sm" style={{ color: '#7a8a9a' }}>
+                  LDA v2 only exists through migration. The full 10M cap requires all {fmtNum(OLD_LDA_SUPPLY)} old LDA to be migrated.
+                </div>
+              </div>
+              <div className="flex flex-col items-center md:items-end gap-2">
+                {stats.migrationOpen && <Countdown seconds={stats.timeRemaining}/>}
+                <Link href="/migrate" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline text-center"
+                  style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', minWidth: 160 }}>
+                  Migrate Now →
+                </Link>
+              </div>
+            </div>
+
+            {/* Migration progress bar */}
+            <div className="mt-5">
+              <div className="flex justify-between text-xs mb-2" style={{ color: '#7a8a9a' }}>
+                <span>Old LDA Migrated: <strong style={{color:'#f5a623'}}>{fmtNum(stats.oldLDAMigrated)} / {fmtNum(OLD_LDA_SUPPLY)}</strong></span>
+                <span>{stats.migrationPct.toFixed(2)}% complete</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: '#0c0c18' }}>
+                <div className="h-full rounded-full transition-all duration-1000"
+                  style={{ width: `${stats.migrationPct}%`, background: 'linear-gradient(90deg,#f5a623,#14b8a6)' }}/>
+              </div>
+              <div className="flex justify-between text-xs mt-1.5">
+                <span style={{ color: '#4a5a6a' }}>LDA v2 Created: {fmtNum(stats.v2Issued)}</span>
+                <span style={{ color: '#4a5a6a' }}>Max Possible: {fmtNum(MAX_V2_SUPPLY)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── TOKEN SUPPLY FLOW ── */}
+          <div className="rounded-2xl p-5 mb-6" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
+            <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#4a5a6a' }}>Supply Chain</div>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              {[
+                { label: 'Old LDA Total',    val: fmtNum(OLD_LDA_SUPPLY),      sub: 'Original supply',           color: '#7a8a9a',  icon: '🦁' },
+                null,
+                { label: 'LDA v2 Created',   val: fmtNum(stats.v2Issued),      sub: `via ${fmtNum(stats.oldLDAMigrated)} old LDA`, color: '#f5a623', icon: '🔄' },
+                null,
+                { label: 'Total Burned',     val: fmtNum(stats.v2TotalBurned), sub: `${stats.burnPct.toFixed(2)}% of issued`, color: '#ef4444', icon: '🔥' },
+                null,
+                { label: 'Circulating',      val: fmtNum(stats.v2Circulating), sub: 'In active wallets',          color: '#14b8a6', icon: '💎' },
+              ].map((item, i) =>
+                item === null ? (
+                  <div key={i} className="text-2xl" style={{ color: '#14b8a6', opacity: 0.4 }}>→</div>
+                ) : (
+                  <div key={item.label} className="text-center">
+                    <div className="text-xl mb-1">{item.icon}</div>
+                    <div className="font-black text-lg" style={{ color: item.color }}>{item.val}</div>
+                    <div className="text-xs font-bold" style={{ color: item.color, opacity: 0.8 }}>{item.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: '#4a5a6a' }}>{item.sub}</div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* ── KEY STATS GRID ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
-              { label: 'Total Burned',   val: stats.totalBurned.toLocaleString(),           sub: `${burnPct}% of supply`,        color: '#ef4444', icon: '🔥' },
-              { label: 'Circulating',    val: (stats.circulatingSupply-stats.totalBurned).toLocaleString(), sub: `of 10M max`,  color: '#14b8a6', icon: '💎' },
-              { label: 'Holders',        val: stats.holders.toLocaleString(),                sub: 'LDA v2 wallets',               color: '#f5a623', icon: '👥' },
-              { label: 'Queries Run',    val: stats.queryCount.toLocaleString(),             sub: '24h platform usage',           color: '#14b8a6', icon: '⚡' },
+              { icon:'💎', label:'Max Hard Cap',       val: fmtNum(MAX_V2_SUPPLY),           sub:'LDA v2 total possible',          color:'#14b8a6' },
+              { icon:'🔄', label:'v2 Supply Created',  val: `${stats.supplyCreatedPct.toFixed(2)}%`, sub:`${fmtNum(stats.v2Issued)} of 10M`,  color:'#f5a623' },
+              { icon:'🔥', label:'Total Burned',       val: fmtNum(stats.v2TotalBurned),     sub:`${stats.burnPct.toFixed(2)}% of issued`,  color:'#ef4444' },
+              { icon:'🏦', label:'Treasury Balance',   val: fmtNum(stats.treasuryBalance),   sub:'30% of all burns',               color:'#a78bfa' },
             ].map(s => (
-              <div key={s.label} className="relative rounded-2xl p-5 overflow-hidden" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
+              <div key={s.label} className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
                 <div className="text-2xl mb-2">{s.icon}</div>
-                <div className="text-2xl font-black mb-1" style={{ color: s.color }}>{s.val}</div>
-                <div className="text-xs font-bold mb-0.5">{s.label}</div>
-                <div className="text-xs" style={{ color: '#4a5a6a' }}>{s.sub}</div>
+                <div className="text-2xl font-black" style={{ color: s.color }}>{s.val}</div>
+                <div className="text-xs font-bold mt-1">{s.label}</div>
+                <div className="text-xs mt-0.5" style={{ color: '#4a5a6a' }}>{s.sub}</div>
               </div>
             ))}
           </div>
 
-          {/* Charts Row */}
-          <div className="grid md:grid-cols-2 gap-4 mb-8">
-            <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#4a5a6a' }}>Cumulative Burn</div>
-                  <div className="text-xl font-black" style={{ color: '#ef4444' }}>{stats.totalBurned.toLocaleString()} LDA v2</div>
-                </div>
-                <div className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>🔥 Deflationary</div>
+          {/* ── ADDITIONAL STATS ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { icon:'👥', label:'LDA v2 Holders',     val: fmtNum(stats.holders),           sub:'Unique wallets',                 color:'#14b8a6' },
+              { icon:'📊', label:'Old LDA Remaining',  val: fmtNum(stats.oldLDARemaining),   sub:'Not yet migrated',               color:'#7a8a9a' },
+              { icon:'⏳', label:'Max More v2 Possible',val: fmtNum(stats.maxAdditionalV2),  sub:'If all remaining migrates',      color:'#f5a623' },
+              { icon:'⚡', label:'Migration Ratio',    val: '2 : 1',                         sub:'Old LDA → LDA v2',               color:'#14b8a6' },
+            ].map(s => (
+              <div key={s.label} className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
+                <div className="text-2xl mb-2">{s.icon}</div>
+                <div className="text-2xl font-black" style={{ color: s.color }}>{s.val}</div>
+                <div className="text-xs font-bold mt-1">{s.label}</div>
+                <div className="text-xs mt-0.5" style={{ color: '#4a5a6a' }}>{s.sub}</div>
               </div>
-              <div style={{ height: 80 }}><MiniChart data={burnHistory} color="#ef4444"/></div>
-            </div>
-            <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#4a5a6a' }}>Total Queries</div>
-                  <div className="text-xl font-black" style={{ color: '#14b8a6' }}>{stats.queryCount.toLocaleString()} runs</div>
-                </div>
-                <div className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(20,184,166,0.1)', color: '#14b8a6', border: '1px solid rgba(20,184,166,0.2)' }}>⚡ Platform Usage</div>
-              </div>
-              <div style={{ height: 80 }}><MiniChart data={queryHistory} color="#14b8a6"/></div>
-            </div>
+            ))}
           </div>
 
-          {/* Supply Bar */}
-          <div className="rounded-2xl p-5 mb-8" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-            <div className="flex justify-between items-center mb-3">
-              <div className="text-sm font-bold">Supply Distribution</div>
-              <div className="text-xs" style={{ color: '#4a5a6a' }}>10,000,000 LDA v2 hard cap</div>
-            </div>
-            <div className="h-3 rounded-full overflow-hidden flex" style={{ background: '#0c0c18' }}>
-              <div style={{ width: `${burnPct}%`, background: 'linear-gradient(90deg,#ef4444,#f97316)', transition: 'width 1s ease' }}/>
-              <div style={{ width: `${100 - Number(burnPct)}%`, background: 'linear-gradient(90deg,#14b8a6,#0d9488)' }}/>
-            </div>
-            <div className="flex justify-between mt-2 text-xs">
-              <span style={{ color: '#ef4444' }}>🔥 Burned: {stats.totalBurned.toLocaleString()}</span>
-              <span style={{ color: '#14b8a6' }}>💎 Circulating: {(stats.totalSupply - stats.totalBurned).toLocaleString()}</span>
-            </div>
-          </div>
+          {/* ── CHARTS + BURN FEED ── */}
+          <div className="grid lg:grid-cols-3 gap-4 mb-6">
 
-          {/* Main grid — Burn Feed + User Stats */}
-          <div className="grid lg:grid-cols-3 gap-4">
+            {/* Charts */}
+            <div className="lg:col-span-1 flex flex-col gap-4">
+              <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#4a5a6a' }}>Cumulative Burns</div>
+                  <span className="text-xs font-bold" style={{ color: '#ef4444' }}>🔥 {fmtNum(stats.v2TotalBurned)} LDA v2</span>
+                </div>
+                <MiniChart data={burnHistory} color="#ef4444"/>
+              </div>
+              <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#4a5a6a' }}>v2 Supply Issued</div>
+                  <span className="text-xs font-bold" style={{ color: '#f5a623' }}>🔄 {fmtNum(stats.v2Issued)} LDA v2</span>
+                </div>
+                <MiniChart data={issueHistory} color="#f5a623"/>
+              </div>
+            </div>
 
             {/* Live Burn Feed */}
             <div className="lg:col-span-2 rounded-2xl overflow-hidden" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px #ef4444', animation: newBurn ? 'none' : 'breathe 2s infinite' }}/>
+                  <span className="w-2 h-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px #ef4444', animation: 'breathe 2s infinite' }}/>
                   <span className="font-bold text-sm">🔥 Live Burn Feed</span>
+                  <span className="text-xs px-2 py-0.5 rounded font-mono" style={{ background: 'rgba(20,184,166,0.08)', color: '#14b8a6', border: '1px solid rgba(20,184,166,0.15)' }}>
+                    Mainnet · Real-time
+                  </span>
                 </div>
-                <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.15)' }}>
-                  Real-time
-                </span>
               </div>
-
-              <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {burns.map((b, i) => (
+              <div style={{ height: 340, overflowY: 'auto' }}>
+                {burns.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2" style={{ color: '#4a5a6a' }}>
+                    <span className="text-3xl opacity-30">🔥</span>
+                    <p className="text-xs">Waiting for first burn event...</p>
+                    <p className="text-xs opacity-60">Burns appear here in real-time once platform is live</p>
+                  </div>
+                ) : burns.map((b, i) => (
                   <div key={b.id} className="flex items-center justify-between px-5 py-3 transition-all"
-                    style={{
-                      borderBottom: '1px solid rgba(255,255,255,0.03)',
-                      background: i === 0 && newBurn ? 'rgba(239,68,68,0.06)' : 'transparent',
-                      animation: i === 0 && newBurn ? 'flash 0.8s ease' : 'none',
-                    }}>
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i===0 && newBurn ? 'rgba(239,68,68,0.06)':'transparent' }}>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                        style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        🔥
-                      </div>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ background: '#0c0c18' }}>🔥</div>
                       <div>
                         <div className="text-xs font-bold font-mono" style={{ color: '#14b8a6' }}>{b.wallet}</div>
-                        <div className="text-xs mt-0.5" style={{ color: '#4a5a6a' }}>{TOOL_NAMES[b.tool] || b.tool}</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#4a5a6a' }}>{TOOL_NAMES[b.tool]}</div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -247,59 +382,31 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Right Panel */}
-            <div className="flex flex-col gap-4">
-              {/* Your Stats */}
-              <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-                <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#4a5a6a' }}>Your Position</div>
-                {connected && address ? (
-                  <>
-                    <div className="text-2xl font-black mb-1" style={{ color: '#14b8a6' }}>{balance.toLocaleString()}</div>
-                    <div className="text-xs mb-4" style={{ color: '#4a5a6a' }}>LDA v2 balance</div>
-                    <div className="space-y-2">
-                      {[['Tier', balance >= 10000 ? '🥇 Gold' : balance >= 2000 ? '🥈 Silver' : balance >= 500 ? '🥉 Bronze' : '—'],
-                        ['Query Discount', balance >= 10000 ? '20%' : balance >= 2000 ? '10%' : balance >= 500 ? '5%' : '0%'],
-                        ['Next Tier', balance >= 10000 ? 'Max tier reached' : balance >= 2000 ? `${(10000-balance).toLocaleString()} to Gold` : balance >= 500 ? `${(2000-balance).toLocaleString()} to Silver` : `${(500-balance).toLocaleString()} to Bronze`],
-                      ].map(([k,v]) => (
-                        <div key={k} className="flex justify-between text-xs py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#7a8a9a' }}>
-                          <span>{k}</span><span className="font-bold" style={{ color: '#dde8f0' }}>{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-4">
-                    <div className="text-3xl mb-2 opacity-30">🦁</div>
-                    <p className="text-xs" style={{ color: '#4a5a6a' }}>Connect wallet to see your stats</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Tool Usage */}
-              <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
-                <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#4a5a6a' }}>Tool Usage Today</div>
-                {[['🔍 Wallet Analyzer', 58, '#14b8a6'],['🛡️ Contract Auditor', 28, '#f5a623'],['📊 Market Intel', 14, '#ef4444']].map(([name, pct, color]) => (
-                  <div key={name as string} className="mb-3">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span style={{ color: '#7a8a9a' }}>{name}</span>
-                      <span className="font-bold">{pct}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#0c0c18' }}>
-                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct}%`, background: color as string }}/>
-                    </div>
+          {/* ── YOUR POSITION ── */}
+          {connected && address && (
+            <div className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.15)' }}>
+              <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#4a5a6a' }}>Your Position</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label:'LDA v2 Balance',   val: fmtNum(balance),  color:'#14b8a6' },
+                  { label:'Your Tier',         val: balance >= 10000 ? '🥇 Gold' : balance >= 2000 ? '🥈 Silver' : balance >= 500 ? '🥉 Bronze' : '— None', color:'#f5a623' },
+                  { label:'Query Discount',    val: balance >= 10000 ? '20%' : balance >= 2000 ? '10%' : balance >= 500 ? '5%' : '0%', color:'#14b8a6' },
+                  { label:'% of Supply',       val: stats.v2Issued > 0 ? `${((balance/stats.v2Issued)*100).toFixed(3)}%` : '—', color:'#a78bfa' },
+                ].map(s => (
+                  <div key={s.label}>
+                    <div className="text-xs mb-1" style={{ color: '#4a5a6a' }}>{s.label}</div>
+                    <div className="text-xl font-black" style={{ color: s.color }}>{s.val}</div>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
       <style>{`
-        @keyframes flash {
-          0%,100% { background: rgba(239,68,68,0.06); }
-          50%      { background: rgba(239,68,68,0.15); }
-        }
+        @keyframes flash { 0%,100%{background:rgba(239,68,68,0.06)} 50%{background:rgba(239,68,68,0.14)} }
       `}</style>
     </>
   )
