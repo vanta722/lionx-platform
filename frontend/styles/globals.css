@@ -14,6 +14,11 @@ html { scroll-behavior: smooth; }
 body { background: #050508; color: #dde8f0; font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
 
 ::-webkit-scrollbar { width: 4px; }
+/* Mobile touch improvements */
+* { -webkit-tap-highlight-color: transparent; }
+input, textarea, button, select { font-family: inherit; }
+/* Hide horizontal scrollbar on tool chips */
+.chips-scroll::-webkit-scrollbar { display: none; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(20,184,166,0.2); border-radius: 4px; }
 
