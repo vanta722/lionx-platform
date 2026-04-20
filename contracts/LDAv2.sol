@@ -17,7 +17,7 @@ pragma solidity ^0.8.19;
  * Burn Split:    70% burned / 30% treasury
  * Network:       Tron (TRC-20 / TVM)
  *
- * Features:
+ * Phase 1 Features:
  *   - Hard capped supply (no inflation ever)
  *   - Native burn + burnFrom for platform queries
  *   - 70/30 burn/treasury split on every query
@@ -25,8 +25,11 @@ pragma solidity ^0.8.19;
  *   - Platform whitelist (only authorized contracts can burnFrom)
  *   - Emergency pause
  *   - Builder revenue share registry
- *   - Snapshot voting support
- *   - Staking interface hook
+ *   - 2-step ownership transfer
+ *
+ * Phase 2 (separate GovernanceLDA contract):
+ *   - On-chain snapshot voting with balance checkpointing
+ *   - Proposal creation + voting via balanceOf() on this token
  */
 
 // ─── Interfaces ────────────────────────────────────────────────
@@ -68,58 +71,32 @@ contract LDAv2 is ITRC20 {
 
     // ── Treasury ──
     address public treasuryWallet;
-    uint256 public burnPercent     = 70; // % of query cost that burns
-    uint256 public treasuryPercent = 30; // % that goes to treasury
+    uint256 public burnPercent     = 70;
+    uint256 public treasuryPercent = 30;
 
     // ── Platform Authorization ──
-    // Only whitelisted contracts can call burnFrom()
     mapping(address => bool) public authorizedPlatforms;
 
     // ── Emergency Pause ──
     bool public paused;
 
     // ── Tiered Access Thresholds ──
-    // Hold this many LDA v2 to reach each tier
-    uint256 public bronzeThreshold  =    500 * 10**6; //    500 LDA v2
-    uint256 public silverThreshold  =  2_000 * 10**6; //  2,000 LDA v2
-    uint256 public goldThreshold    = 10_000 * 10**6; // 10,000 LDA v2
+    uint256 public bronzeThreshold  =    500 * 10**6;
+    uint256 public silverThreshold  =  2_000 * 10**6;
+    uint256 public goldThreshold    = 10_000 * 10**6;
 
     // ── Builder Revenue Share ──
-    // Builders registered here receive a cut of treasury from their tool's burns
     struct Builder {
-        address wallet;       // builder payout wallet
-        uint256 sharePercent; // % of treasuryPercent they earn (0–100)
+        address wallet;
+        uint256 sharePercent;
         bool    active;
         uint256 totalEarned;
     }
-    mapping(bytes32 => Builder) public builders;  // toolId => Builder
+    mapping(bytes32 => Builder) public builders;
     bytes32[] public registeredTools;
 
-    // ── Snapshot Voting ──
-    struct Snapshot {
-        uint256 id;
-        uint256 blockNumber;
-        uint256 totalSupplyAt;
-        string  description;
-        bool    active;
-    }
-
-    // Balance checkpoint for governance (Compound-style)
-    // Each entry records the balance after a change at a specific block.
-    struct Checkpoint {
-        uint256 fromBlock;
-        uint256 balance;
-    }
-
-    uint256 public snapshotCount;
-    mapping(uint256 => Snapshot) public snapshots;
-    mapping(address => Checkpoint[]) private _checkpoints; // replaces _snapshotBalances
-    mapping(uint256 => mapping(address => bool)) public hasVoted;
-    mapping(uint256 => uint256) public votesFor;
-    mapping(uint256 => uint256) public votesAgainst;
-
-    // ── Staking Registry ──
-    address public stakingContract; // set after staking contract deployed
+    // ── Staking ──
+    address public stakingContract;
 
     // ── Events ──
     event Burned(address indexed from, uint256 burnAmount, uint256 treasuryAmount, bytes32 toolId);
@@ -129,8 +106,6 @@ contract LDAv2 is ITRC20 {
     event TierThresholdsUpdated(uint256 bronze, uint256 silver, uint256 gold);
     event BuilderRegistered(bytes32 indexed toolId, address indexed wallet, uint256 sharePercent);
     event BuilderPaid(bytes32 indexed toolId, address indexed wallet, uint256 amount);
-    event SnapshotCreated(uint256 indexed id, uint256 blockNumber, string description);
-    event VoteCast(uint256 indexed snapshotId, address indexed voter, bool support, uint256 weight);
     event OwnershipTransferInitiated(address indexed newOwner);
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
     event Paused(address by);
@@ -211,38 +186,22 @@ contract LDAv2 is ITRC20 {
         return true;
     }
 
-    // ─── Minting (Owner Only, Respects Hard Cap) ───────────────
+    // ─── Minting (Owner Only, Hard Cap Enforced) ───────────────
 
-    /**
-     * @dev Mint new LDA v2 tokens.
-     * Used for: migration distribution, initial LP seed, team vesting.
-     * HARD CAP: totalSupply + burned can never exceed MAX_SUPPLY.
-     */
     function mint(address to, uint256 amount) external onlyOwner {
         require(to != address(0), "LDA: mint to zero");
         require(_totalSupply + amount <= MAX_SUPPLY, "LDA: exceeds hard cap");
-        _totalSupply    += amount;
-        _balances[to]   += amount;
-        _writeCheckpoint(to, _balances[to]);
+        _totalSupply  += amount;
+        _balances[to] += amount;
         emit Transfer(address(0), to, amount);
     }
 
     // ─── Burn Mechanics ────────────────────────────────────────
 
-    /**
-     * @dev User burns their own tokens (self-initiated).
-     * Split: burnPercent% destroyed + treasuryPercent% to treasury.
-     */
     function burn(uint256 amount) external whenNotPaused {
         _splitBurn(msg.sender, amount, bytes32(0));
     }
 
-    /**
-     * @dev Platform contract burns on behalf of user after AI query.
-     * Caller must be an authorized platform.
-     * User must have approved the platform contract beforehand.
-     * toolId links the burn to a specific builder for revenue share.
-     */
     function burnFrom(address account, uint256 amount, bytes32 toolId)
         external whenNotPaused onlyAuthorizedPlatform
     {
@@ -252,32 +211,23 @@ contract LDAv2 is ITRC20 {
         _splitBurn(account, amount, toolId);
     }
 
-    /**
-     * @dev Internal: split burn between destruction and treasury.
-     *      If toolId is registered, builder gets their cut from treasury portion.
-     */
     function _splitBurn(address from, uint256 amount, bytes32 toolId) internal {
         require(_balances[from] >= amount, "LDA: burn exceeds balance");
 
         uint256 burnAmount     = (amount * burnPercent) / 100;
         uint256 treasuryAmount = amount - burnAmount;
 
-        // Destroy burnPercent%
-        _balances[from]  -= burnAmount;
-        _totalSupply     -= burnAmount;
-        totalBurned      += burnAmount;
-        _writeCheckpoint(from, _balances[from]);
+        _balances[from] -= burnAmount;
+        _totalSupply    -= burnAmount;
+        totalBurned     += burnAmount;
         emit Transfer(from, address(0), burnAmount);
 
-        // Treasury split — check for builder share
         if (toolId != bytes32(0) && builders[toolId].active) {
-            Builder storage b = builders[toolId];
+            Builder storage b   = builders[toolId];
             uint256 builderCut  = (treasuryAmount * b.sharePercent) / 100;
             uint256 platformCut = treasuryAmount - builderCut;
-
             _transfer(from, b.wallet, builderCut);
             _transfer(from, treasuryWallet, platformCut);
-
             b.totalEarned += builderCut;
             emit BuilderPaid(toolId, b.wallet, builderCut);
         } else {
@@ -291,10 +241,6 @@ contract LDAv2 is ITRC20 {
 
     enum Tier { None, Bronze, Silver, Gold }
 
-    /**
-     * @dev Returns the access tier for a wallet based on LDA v2 balance.
-     * Tier discounts and perks enforced at the platform level.
-     */
     function getTier(address account) external view returns (Tier) {
         uint256 bal = _balances[account];
         if (bal >= goldThreshold)   return Tier.Gold;
@@ -303,11 +249,9 @@ contract LDAv2 is ITRC20 {
         return Tier.None;
     }
 
-    function setTierThresholds(
-        uint256 _bronze,
-        uint256 _silver,
-        uint256 _gold
-    ) external onlyOwner {
+    function setTierThresholds(uint256 _bronze, uint256 _silver, uint256 _gold)
+        external onlyOwner
+    {
         require(_bronze < _silver && _silver < _gold, "LDA: invalid thresholds");
         bronzeThreshold = _bronze;
         silverThreshold = _silver;
@@ -325,33 +269,21 @@ contract LDAv2 is ITRC20 {
 
     // ─── Builder Revenue Share ─────────────────────────────────
 
-    /**
-     * @dev Register a builder tool for revenue share.
-     * @param toolId    Unique identifier for the tool (keccak256 hash)
-     * @param wallet    Builder's payout wallet
-     * @param sharePct  % of the treasury portion the builder receives (max 80)
-     */
-    function registerBuilder(
-        bytes32 toolId,
-        address wallet,
-        uint256 sharePct
-    ) external onlyOwner {
-        require(wallet != address(0), "LDA: zero wallet");
-        require(sharePct <= 80, "LDA: share too high");
-        require(!builders[toolId].active, "LDA: tool already registered");
-
-        builders[toolId] = Builder({
-            wallet:       wallet,
-            sharePercent: sharePct,
-            active:       true,
-            totalEarned:  0
-        });
+    function registerBuilder(bytes32 toolId, address wallet, uint256 sharePct)
+        external onlyOwner
+    {
+        require(wallet  != address(0), "LDA: zero wallet");
+        require(sharePct <= 80,        "LDA: share too high");
+        require(!builders[toolId].active, "LDA: already registered");
+        builders[toolId] = Builder({ wallet: wallet, sharePercent: sharePct, active: true, totalEarned: 0 });
         registeredTools.push(toolId);
         emit BuilderRegistered(toolId, wallet, sharePct);
     }
 
-    function updateBuilder(bytes32 toolId, address wallet, uint256 sharePct) external onlyOwner {
-        require(builders[toolId].active, "LDA: tool not found");
+    function updateBuilder(bytes32 toolId, address wallet, uint256 sharePct)
+        external onlyOwner
+    {
+        require(builders[toolId].active, "LDA: not found");
         require(sharePct <= 80, "LDA: share too high");
         builders[toolId].wallet       = wallet;
         builders[toolId].sharePercent = sharePct;
@@ -365,133 +297,8 @@ contract LDAv2 is ITRC20 {
         return registeredTools.length;
     }
 
-    // ─── Snapshot Voting ───────────────────────────────────────
-
-    /**
-     * @dev Create a governance snapshot for a vote.
-     * Captures all holder balances at the current block.
-     * Voting is off-chain signal — results logged on-chain.
-     */
-    function createSnapshot(string calldata description) external onlyOwner returns (uint256) {
-        uint256 id = ++snapshotCount;
-        snapshots[id] = Snapshot({
-            id:            id,
-            blockNumber:   block.number,
-            totalSupplyAt: _totalSupply,
-            description:   description,
-            active:        true
-        });
-        emit SnapshotCreated(id, block.number, description);
-        return id;
-    }
-
-    function closeSnapshot(uint256 id) external onlyOwner {
-        snapshots[id].active = false;
-    }
-
-    /**
-     * @dev Cast a vote on an active snapshot.
-     * Weight = balance AT the snapshot block (not current balance).
-     * Prevents vote manipulation by buying tokens after snapshot creation.
-     */
-    function vote(uint256 snapshotId, bool support) external whenNotPaused {
-        Snapshot storage s = snapshots[snapshotId];
-        require(s.active, "LDA: snapshot not active");
-        require(!hasVoted[snapshotId][msg.sender], "LDA: already voted");
-
-        // Use balance at snapshot block — checkpointed at every transfer
-        uint256 weight = _getPriorBalance(msg.sender, s.blockNumber);
-        require(weight > 0, "LDA: no voting power at snapshot block");
-
-        hasVoted[snapshotId][msg.sender] = true;
-        if (support) { votesFor[snapshotId]     += weight; }
-        else          { votesAgainst[snapshotId] += weight; }
-
-        emit VoteCast(snapshotId, msg.sender, support, weight);
-    }
-
-    /**
-     * @dev Returns the balance of `account` at a past block number.
-     * Uses binary search over stored checkpoints. O(log n).
-     * @param account  The address to query
-     * @param blockNumber  Must be a finalized block (< current block)
-     */
-    function _getPriorBalance(address account, uint256 blockNumber)
-        internal view returns (uint256)
-    {
-        Checkpoint[] storage ckpts = _checkpoints[account];
-        uint256 len = ckpts.length;
-        if (len == 0) return 0;
-
-        // Shortcut: most recent checkpoint is before or at blockNumber
-        if (ckpts[len - 1].fromBlock <= blockNumber) {
-            return ckpts[len - 1].balance;
-        }
-        // No checkpoint before blockNumber
-        if (ckpts[0].fromBlock > blockNumber) return 0;
-
-        // Binary search
-        uint256 lower = 0;
-        uint256 upper = len - 1;
-        while (upper > lower) {
-            uint256 center = upper - (upper - lower) / 2;
-            Checkpoint memory cp = ckpts[center];
-            if (cp.fromBlock == blockNumber) {
-                return cp.balance;
-            } else if (cp.fromBlock < blockNumber) {
-                lower = center;
-            } else {
-                upper = center - 1;
-            }
-        }
-        return ckpts[lower].balance;
-    }
-
-    /**
-     * @dev Public wrapper for UI/frontend to query historical balances.
-     */
-    function getPriorBalance(address account, uint256 blockNumber)
-        external view returns (uint256)
-    {
-        require(blockNumber < block.number, "LDA: block not yet mined");
-        return _getPriorBalance(account, blockNumber);
-    }
-
-    /**
-     * @dev Write or update a balance checkpoint for `account`.
-     * If the last checkpoint is from the same block, updates in place (gas efficient).
-     * Called after every balance change: transfer, mint, burn.
-     */
-    function _writeCheckpoint(address account, uint256 newBalance) internal {
-        Checkpoint[] storage ckpts = _checkpoints[account];
-        uint256 pos = ckpts.length;
-        if (pos > 0 && ckpts[pos - 1].fromBlock == block.number) {
-            // Same block — update in place instead of pushing a new entry
-            ckpts[pos - 1].balance = newBalance;
-        } else {
-            ckpts.push(Checkpoint({
-                fromBlock: block.number,
-                balance:   newBalance
-            }));
-        }
-    }
-
-    function getVoteResults(uint256 snapshotId) external view returns (
-        uint256 forVotes,
-        uint256 againstVotes,
-        uint256 totalSupplyAt,
-        bool    active
-    ) {
-        Snapshot storage s = snapshots[snapshotId];
-        return (votesFor[snapshotId], votesAgainst[snapshotId], s.totalSupplyAt, s.active);
-    }
-
     // ─── Staking Hook ──────────────────────────────────────────
 
-    /**
-     * @dev Set the address of the staking contract.
-     * Staking contract is auto-authorized as a platform.
-     */
     function setStakingContract(address _staking) external onlyOwner {
         require(_staking != address(0), "LDA: zero address");
         stakingContract = _staking;
@@ -507,10 +314,6 @@ contract LDAv2 is ITRC20 {
         emit TreasuryWalletUpdated(newTreasury);
     }
 
-    /**
-     * @dev Adjust burn/treasury split. Must sum to 100.
-     * Bounded: burn must be 50–90% (prevents treasury abuse).
-     */
     function setBurnSplit(uint256 _burnPct, uint256 _treasuryPct) external onlyOwner {
         require(_burnPct + _treasuryPct == 100, "LDA: must sum to 100");
         require(_burnPct >= 50 && _burnPct <= 90, "LDA: burn 50-90% only");
@@ -521,15 +324,8 @@ contract LDAv2 is ITRC20 {
 
     // ─── Emergency Pause ───────────────────────────────────────
 
-    function pause() external onlyOwner {
-        paused = true;
-        emit Paused(msg.sender);
-    }
-
-    function unpause() external onlyOwner {
-        paused = false;
-        emit Unpaused(msg.sender);
-    }
+    function pause()   external onlyOwner { paused = true;  emit Paused(msg.sender);   }
+    function unpause() external onlyOwner { paused = false; emit Unpaused(msg.sender); }
 
     // ─── Ownership Transfer (2-step) ───────────────────────────
 
@@ -553,17 +349,13 @@ contract LDAv2 is ITRC20 {
 
     // ─── View Helpers ──────────────────────────────────────────
 
-    function circulatingSupply() external view returns (uint256) {
-        return _totalSupply;
-    }
+    function circulatingSupply() external view returns (uint256) { return _totalSupply; }
 
     function remainingMintable() external view returns (uint256) {
-        // _totalSupply already reflects burned tokens (burn reduces supply)
-        // Do NOT subtract totalBurned again — that double-counts
         return MAX_SUPPLY - _totalSupply;
     }
 
-    // ─── Internal Helpers ──────────────────────────────────────
+    // ─── Internal ──────────────────────────────────────────────
 
     function _transfer(address from, address to, uint256 amount) internal {
         require(from != address(0), "LDA: from zero");
@@ -571,14 +363,12 @@ contract LDAv2 is ITRC20 {
         require(_balances[from] >= amount, "LDA: insufficient balance");
         _balances[from] -= amount;
         _balances[to]   += amount;
-        _writeCheckpoint(from, _balances[from]);
-        _writeCheckpoint(to,   _balances[to]);
         emit Transfer(from, to, amount);
     }
 
     function _approve(address _owner, address spender, uint256 amount) internal {
-        require(_owner   != address(0), "LDA: owner zero");
-        require(spender  != address(0), "LDA: spender zero");
+        require(_owner  != address(0), "LDA: owner zero");
+        require(spender != address(0), "LDA: spender zero");
         _allowances[_owner][spender] = amount;
         emit Approval(_owner, spender, amount);
     }
