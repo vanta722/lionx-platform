@@ -34,13 +34,25 @@ interface LiveStats {
   supplyCreatedPct:   number   // % of max 10M that exists
 }
 
+// Seed with confirmed on-chain data — API updates will overwrite
+const KNOWN_BURNED = 1_050_000  // confirmed in Tron black hole TLsV52s...
+
 const DEFAULT_STATS: LiveStats = {
-  platformActive: true, timeRemaining: 30 * 86400,
-  totalSpent: 0, totalBurned: 0,
-  circulatingSupply: LDA_SUPPLY, remainingSupply: LDA_SUPPLY,
-  totalSupply: 0, burnedSupply: 0, circulating: 0,
-  treasuryBalance: 0, holders: 281, burnRate24h: 0,
-  burnedPct: 0, burnPct: 0, supplyCreatedPct: 0,
+  platformActive:    true,
+  timeRemaining:     0,
+  totalSpent:        KNOWN_BURNED,
+  totalBurned:       KNOWN_BURNED,
+  circulatingSupply: LDA_SUPPLY - KNOWN_BURNED,
+  remainingSupply:   LDA_SUPPLY,
+  totalSupply:       LDA_SUPPLY,
+  burnedSupply:      KNOWN_BURNED,
+  circulating:       LDA_SUPPLY - KNOWN_BURNED,
+  treasuryBalance:   0,
+  holders:           281,
+  burnRate24h:       KNOWN_BURNED,
+  burnedPct:         (KNOWN_BURNED / LDA_SUPPLY) * 100,
+  burnPct:           (KNOWN_BURNED / LDA_SUPPLY) * 100,
+  supplyCreatedPct:  (KNOWN_BURNED / LDA_SUPPLY) * 100,
 }
 
 interface BurnEvent {

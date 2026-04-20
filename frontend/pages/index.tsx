@@ -14,8 +14,8 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [typeText, setTypeText]     = useState('')
   const [countdown, setCountdown]   = useState('30d 00h 00m 00s')
-  const [totalBurned, setTotalBurned] = useState(0)
-  const [displayBurned, setDisplayBurned] = useState(0)
+  const [totalBurned, setTotalBurned]   = useState(1_050_000) // confirmed black hole balance
+  const [displayBurned, setDisplayBurned] = useState(1_050_000)
 
   // Particle canvas
   useEffect(() => {
