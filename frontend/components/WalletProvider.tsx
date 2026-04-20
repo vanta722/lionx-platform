@@ -20,7 +20,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [tier,      setTier]      = useState(0)
   const [connected, setConnected] = useState(false)
 
-  const LDA_V2 = process.env.NEXT_PUBLIC_LDA_V2 || ''
+  const LDA_V1 = process.env.NEXT_PUBLIC_LDA_V1 || ''
 
   async function connect() {
     try {
@@ -42,8 +42,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   async function refreshBalance(addr: string) {
     try {
-      if (!window.tronWeb || !LDA_V2) return
-      const contract = await window.tronWeb.contract().at(LDA_V2)
+      if (!window.tronWeb || !LDA_V1) return
+      const contract = await window.tronWeb.contract().at(LDA_V1)
       const bal  = await contract.balanceOf(addr).call()
       const tier = await contract.getTier(addr).call()
       setBalance(Number(bal) / 1e6)

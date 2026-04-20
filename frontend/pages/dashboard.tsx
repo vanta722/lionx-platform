@@ -279,7 +279,7 @@ export default function Dashboard() {
               </div>
               <div className="flex flex-col items-center md:items-end gap-2">
                 {stats.platformActive && <Countdown seconds={stats.timeRemaining}/>}
-                <Link href="/migrate" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline text-center"
+                <Link href="/tools" className="px-6 py-2.5 rounded-xl font-bold text-sm no-underline text-center"
                   style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', minWidth: 160 }}>
                   Migrate Now →
                 </Link>

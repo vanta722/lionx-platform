@@ -14,10 +14,8 @@ declare global {
 // Platform now uses existing LDA v1 token directly — no new token needed.
 // Only ONE contract to deploy: LDAPlatform.sol
 export const CONTRACTS = {
-  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',                                  // LDA v1 mainnet (the token users hold NOW)
-  LDA_V2:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',                                  // alias — same token for platform use
-  PLATFORM:  process.env.NEXT_PUBLIC_PLATFORM || 'TQMc3D4Q6WAZmDuDj5ySZ4dMNKd87rgVPD', // Shasta testnet
-  MIGRATION: '',   // not needed — using LDA v1 directly
+  LDA_V1:    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',  // LDA token (mainnet)
+  PLATFORM:  process.env.NEXT_PUBLIC_PLATFORM || 'TQMc3D4Q6WAZmDuDj5ySZ4dMNKd87rgVPD', // update after mainnet deploy
   STAKING:   '',   // Phase 2
   MANES:     'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
 }
@@ -65,9 +63,9 @@ export function truncateAddress(addr: string): string {
 
 // ── LDA v2 Token Calls ──
 
-export async function getLDAv2Balance(address: string): Promise<number> {
+export async function getLDABalance(address: string): Promise<number> {
   try {
-    const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V2)
+    const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V1)
     const bal = await contract.balanceOf(address).call()
     return Number(bal) / 10**6
   } catch {
@@ -97,7 +95,7 @@ export async function getMANESBalance(address: string): Promise<number> {
 
 export async function getUserTier(address: string): Promise<number> {
   try {
-    const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V2)
+    const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V1)
     const tier = await contract.getTier(address).call()
     return Number(tier)
   } catch {
@@ -126,7 +124,7 @@ export const TIER_COLORS: Record<number, string> = {
  * Must be called before first query (or when allowance runs low).
  */
 export async function approvePlatform(amount: number): Promise<string> {
-  const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V2)
+  const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V1)
   const amountSun = Math.floor(amount * 10**6)
   const tx = await contract.approve(CONTRACTS.PLATFORM, amountSun).send()
   return tx
@@ -148,29 +146,15 @@ export async function executeQuery(toolId: string, queryRef: string): Promise<st
 
 // ── Migration ──
 
-export async function approveMigration(amount: number): Promise<string> {
-  const contract = await window.tronWeb.contract().at(CONTRACTS.LDA_V1)
-  const amountSun = Math.floor(amount * 10**6)
-  const tx = await contract.approve(CONTRACTS.MIGRATION, amountSun).send()
-  return tx
-}
-
-export async function migrateTokens(amount: number): Promise<string> {
-  const contract = await window.tronWeb.contract().at(CONTRACTS.MIGRATION)
-  const amountSun = Math.floor(amount * 10**6)
-  const tx = await contract.migrate(amountSun).send()
-  return tx
-}
-
+// Migration removed — platform uses LDA token directly
+// Placeholder to avoid import errors
 export async function getMigrationStats() {
-  const contract = await window.tronWeb.contract().at(CONTRACTS.MIGRATION)
-  const stats = await contract.stats().call()
   return {
-    open:          stats[0],
-    deadline:      Number(stats[1]) * 1000,
-    totalMigrated: Number(stats[2]) / 10**6,
-    totalIssued:   Number(stats[3]) / 10**6,
-    timeRemaining: Number(stats[4]),
+    open:          false,
+    deadline:      0,
+    totalMigrated: 0,
+    totalIssued:   0,
+    timeRemaining: 0,
   }
 }
 
