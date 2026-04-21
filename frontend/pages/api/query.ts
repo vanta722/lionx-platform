@@ -510,9 +510,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // NEW-1 FIX: use cleanInput in prompt — not raw input (prompt injection prevention)
     const prompt = promptFn(cleanInput, onChainData)
 
-    // Call OpenRouter
+    // Call OpenRouter — 30s hard timeout so a hung upstream never stalls the slot
     const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
