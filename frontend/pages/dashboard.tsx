@@ -146,13 +146,10 @@ export default function Dashboard() {
       const totalBurned = ldaEntry ? Number(ldaEntry.balance) / 1e6 : 1_050_000
       const circulating = totalSupply - totalBurned
 
-      // Fetch treasury balance — /api/account works reliably for TRC20 token balances
-      const tRes  = await fetch(`https://apilist.tronscanapi.com/api/account?address=${TREASURY_ADDR}`)
+      // Fetch treasury balance via our own API (avoids CORS + user-agent issues on mobile)
+      const tRes  = await fetch('/api/treasury-balance')
       const tData = await tRes.json()
-      const ldaTok = (tData?.trc20token_balances || []).find(
-        (t: any) => t.tokenAbbr === 'LDA' || t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
-      )
-      const treasuryBal = ldaTok ? Number(ldaTok.balance) / 1e6 : 0
+      const treasuryBal = Number(tData?.balance || 0)
 
       const s: LiveStats = {
         platformActive:    true,
