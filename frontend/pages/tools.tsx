@@ -189,12 +189,12 @@ export default function Tools() {
                 </button>
               ))}
               <div className="text-xs font-bold uppercase tracking-widest mt-5 mb-3" style={{ color: '#4a5a6a' }}>Coming Soon</div>
-              {[['🤖','Trade Signals',75],['🐋','Whale Tracker',60],['💎','NFT Valuator',40]].map(([icon,name,cost]) => (
+              {[['🤖','Trade Signals'],['🐋','Whale Tracker'],['💎','NFT Valuator']].map(([icon,name]) => (
                 <div key={name as string} className="flex items-center gap-3 p-3 rounded-xl mb-1 opacity-35">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0" style={{ background: '#0c0c18' }}>{icon}</div>
                   <div>
                     <div className="text-xs font-bold">{name}</div>
-                    <div className="text-xs" style={{ color: '#4a5a6a' }}>{cost} LDA</div>
+                    <div className="text-xs" style={{ color: '#4a5a6a' }}>Coming Soon</div>
                   </div>
                 </div>
               ))}
