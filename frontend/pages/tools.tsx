@@ -114,7 +114,7 @@ export default function Tools() {
 
       let data: any
       try { data = await res.json() } catch { throw new Error(`Server error ${res.status}`) }
-      if (!res.ok) throw new Error(data?.error || `API error ${res.status}`)
+      if (!res.ok) throw new Error(data?.detail ? `${data.error}: ${data.detail}` : (data?.error || `API error ${res.status}`))
 
       setResult(data)
       setRunState('done')

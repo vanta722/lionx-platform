@@ -266,7 +266,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         'X-Title': 'Lion X AI Platform',
       },
       body: JSON.stringify({
-        model: 'google/gemini-flash-1.5',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user',   content: prompt }
