@@ -43,53 +43,49 @@ export default function Tools() {
   const TREASURY = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
   const LDA_V1   = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 
-  function copyToClipboard(text: string) {
-    // Mobile-safe clipboard: try modern API first, fall back to textarea trick
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).catch(() => legacyCopy(text))
-    } else {
-      legacyCopy(text)
-    }
-  }
-
-  function legacyCopy(text: string) {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    try { document.execCommand('copy') } catch {}
-    document.body.removeChild(ta)
-  }
-
-  function shareReport() {
+  async function shareReport() {
     if (!result || result.error) return
-    // NEW-2 FIX: strip queriedBy + timestamp before encoding — no wallet in share URL
     const { queriedBy: _q, timestamp: _t, ...shareResult } = result
     const encoded = btoa(JSON.stringify({ tool: tool.id, result: shareResult }))
-    copyToClipboard(`${window.location.origin}/report?d=${encoded}`)
+    const url = `${window.location.origin}/report?d=${encoded}`
+    // Try native share sheet first (works in TronLink + all mobile browsers)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Lion X — ${tool.name}`, url })
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        return
+      } catch {}
+    }
+    // Fallback: clipboard API
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); return } catch {}
+    }
+    // Last resort: prompt so user can manually copy
+    window.prompt('Copy this link:', url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function shareToX() {
+  async function shareToX() {
     if (!result || result.error) return
-    // NEW-2 FIX: strip queriedBy + timestamp from tweet share too
     const { queriedBy: _q2, timestamp: _t2, ...tweetResult } = result
     const encoded = btoa(JSON.stringify({ tool: tool.id, result: tweetResult }))
     const url     = `${window.location.origin}/report?d=${encoded}`
     const score   = result.score || ''
     const verdict = result.verdict || ''
     const tweet   = `🦁 ${tool.name} on Lion X AI Platform\n\n${verdict ? verdict + '\n' : ''}${score ? `Score: ${score}/100\n` : ''}\n🔗 ${url}\n\n#LionX #Tron #LDA #CryptoAI`
-    // Mobile-safe: create and click an anchor instead of window.open (avoids popup block)
-    const a = document.createElement('a')
-    a.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`
+    // Try native share sheet first (best on mobile / in-app browsers)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Lion X — ${tool.name}`, text: tweet, url })
+        setTweetCopied(true); setTimeout(() => setTweetCopied(false), 2000)
+        return
+      } catch {}
+    }
+    // Fallback: navigate directly (works in TronLink browser, leaves app)
+    window.location.href = tweetUrl
     setTweetCopied(true)
     setTimeout(() => setTweetCopied(false), 2000)
   }
