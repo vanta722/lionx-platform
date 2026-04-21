@@ -274,20 +274,37 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   return { allowed: true, remaining: RATE_LIMIT - entry.count }
 }
 
-// Replay protection: store used txHashes with 20-min TTL
-// In-memory store (survives within a single serverless instance lifetime)
-// For production scale, replace with Redis/Upstash
-const usedTxHashes = new Map<string, number>()
-const REPLAY_TTL_MS = 20 * 60 * 1000 // 20 minutes
+// ── Replay protection: Upstash Redis (persistent across cold starts) ───────
+// Falls back to in-memory if KV_REST_API_URL is not configured.
+// To enable persistent protection: Vercel dashboard → Storage → Connect KV
+const inMemoryUsed = new Map<string, number>()
+const REPLAY_TTL_MS = 20 * 60 * 1000
 
-function isReplay(txHash: string): boolean {
+async function isReplay(txHash: string): Promise<boolean> {
+  // --- Upstash Redis path (production) ---
+  const kvUrl   = process.env.KV_REST_API_URL
+  const kvToken = process.env.KV_REST_API_TOKEN
+  if (kvUrl && kvToken) {
+    try {
+      const key = `lionx:used:${txHash}`
+      // SET key 1 EX 1200 NX — only sets if not exists, TTL 20 min
+      const setRes = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/1200/nx`, {
+        headers: { Authorization: `Bearer ${kvToken}` }
+      })
+      const setData = await setRes.json()
+      // Upstash returns { result: 'OK' } if set, { result: null } if already exists
+      return setData?.result !== 'OK'
+    } catch (e) {
+      console.error('[lionx] KV error, falling back to in-memory:', e)
+    }
+  }
+  // --- In-memory fallback (dev / no KV configured) ---
   const now = Date.now()
-  // Purge expired entries
-  Array.from(usedTxHashes.entries()).forEach(([hash, ts]) => {
-    if (now - ts > REPLAY_TTL_MS) usedTxHashes.delete(hash)
+  Array.from(inMemoryUsed.entries()).forEach(([h, ts]) => {
+    if (now - ts > REPLAY_TTL_MS) inMemoryUsed.delete(h)
   })
-  if (usedTxHashes.has(txHash)) return true
-  usedTxHashes.set(txHash, now)
+  if (inMemoryUsed.has(txHash)) return true
+  inMemoryUsed.set(txHash, now)
   return false
 }
 
@@ -302,9 +319,30 @@ const TOOL_COSTS: Record<string, number> = {
   MARKET_INTEL:     25,
 }
 
-// Track recently-used wallet+tool combos for replay protection (no txHash needed)
-const recentWalletQueries = new Map<string, number>() // "address:tool" → timestamp
-const WALLET_COOLDOWN_MS  = 5 * 60 * 1000 // 5 min cooldown per wallet per tool
+// Per-wallet cooldown: prevent same wallet from hammering same tool back-to-back
+// Stored in KV when available, in-memory fallback
+const inMemoryCooldowns = new Map<string, number>()
+const WALLET_COOLDOWN_MS = 5 * 60 * 1000 // 5 min
+
+async function checkWalletCooldown(address: string, tool: string): Promise<boolean> {
+  const key = `lionx:cd:${address}:${tool}`
+  const kvUrl   = process.env.KV_REST_API_URL
+  const kvToken = process.env.KV_REST_API_TOKEN
+  if (kvUrl && kvToken) {
+    try {
+      const setRes  = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/300/nx`, {
+        headers: { Authorization: `Bearer ${kvToken}` }
+      })
+      const setData = await setRes.json()
+      return setData?.result !== 'OK' // true = on cooldown
+    } catch { /* fallthrough */ }
+  }
+  const now = Date.now()
+  const last = inMemoryCooldowns.get(key) || 0
+  if (now - last < WALLET_COOLDOWN_MS) return true
+  inMemoryCooldowns.set(key, now)
+  return false
+}
 
 // Look up the most recent LDA transfer FROM wallet TO treasury (within last 5 min)
 // No txHash needed — server-side Tronscan lookup is more reliable than client-side hash
@@ -341,9 +379,16 @@ async function lookupAndVerify(
           continue
         }
 
-        // Check replay
+        // HIGH-2 FIX: verify the toAddress in the event matches treasury
+        const to = (evt.transferToAddress || evt.to_address || '').toLowerCase()
+        if (to && to !== TREASURY_ADDR.toLowerCase()) {
+          console.log(`[lionx] skip: toAddress ${to} !== treasury`)
+          continue
+        }
+
+        // Check replay (now async — uses KV if available)
         const txHash = evt.transactionHash || `${from}-${ts}`
-        if (isReplay(txHash)) { console.log(`[lionx] skip: replay ${txHash}`); continue }
+        if (await isReplay(txHash)) { console.log(`[lionx] skip: replay ${txHash}`); continue }
 
         console.log(`[lionx] ✅ verified: ${from} → ${amount} LDA for ${tool}`)
         return { valid: true, txHash }
@@ -359,7 +404,25 @@ async function lookupAndVerify(
   }
 }
 
+// HIGH-4 FIX: allowed origins
+const ALLOWED_ORIGINS = [
+  'https://lion-xai.com',
+  'https://www.lion-xai.com',
+  'https://frontend-phi-blond-32.vercel.app',
+]
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // CORS — only allow requests from our own frontend
+  const origin = req.headers.origin || ''
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+  } else if (origin) {
+    return res.status(403).json({ error: 'Origin not allowed' })
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'POST')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   // Rate limit by IP
@@ -370,10 +433,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { tool, input, address } = req.body
-  if (!tool || !input) return res.status(400).json({ error: 'Missing tool or input' })
 
-  // Look up recent LDA payment on-chain — no txHash needed
-  const verification = await lookupAndVerify(address || '', tool)
+  // ── CRIT-1 FIX: address is required — no empty-address free rides ──────────
+  if (!tool || !input || !address) {
+    return res.status(400).json({ error: 'Missing required fields: tool, input, address' })
+  }
+
+  // ── HIGH-3 FIX: validate input length and address format ───────────────────
+  if (typeof input !== 'string' || input.length > 500) {
+    return res.status(400).json({ error: 'Invalid input' })
+  }
+  const cleanInput   = input.trim().replace(/[<>"'`]/g, '')
+  const isTronAddr   = /^T[A-Za-z0-9]{33}$/.test(address)
+  if (!isTronAddr) {
+    return res.status(400).json({ error: 'Invalid wallet address' })
+  }
+
+  // ── Per-wallet cooldown (CRIT-3 fix — actually enforced now) ───────────────
+  const onCooldown = await checkWalletCooldown(address, tool)
+  if (onCooldown) {
+    return res.status(429).json({ error: 'Please wait 5 minutes before running the same tool again' })
+  }
+
+  // Look up recent LDA payment on-chain
+  const verification = await lookupAndVerify(address, tool)
   if (!verification.valid) return res.status(403).json({ error: verification.reason })
 
   const promptFn = TOOL_PROMPTS[tool]
@@ -382,9 +465,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Fetch real on-chain data first
     let onChainData: any = null
-    if (tool === 'WALLET_ANALYZER')  onChainData = await getWalletData(input)
-    if (tool === 'CONTRACT_AUDITOR') onChainData = await getContractData(input)
-    if (tool === 'MARKET_INTEL')     onChainData = await getTokenData(input)
+    if (tool === 'WALLET_ANALYZER')  onChainData = await getWalletData(cleanInput)
+    if (tool === 'CONTRACT_AUDITOR') onChainData = await getContractData(cleanInput)
+    if (tool === 'MARKET_INTEL')     onChainData = await getTokenData(cleanInput)
 
     const prompt = promptFn(input, onChainData)
 
@@ -416,10 +499,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Parse and return
     const parsed = JSON.parse(content)
-    return res.status(200).json({ ...parsed, queriedBy: address, timestamp: Date.now() })
+
+    // HIGH-5 FIX: whitelist AI response fields — never spread unknown keys to client
+    const safe = {
+      score:      parsed.score,
+      scoreLabel: parsed.scoreLabel,
+      verdict:    parsed.verdict,
+      type:       parsed.type,
+      metrics:    Array.isArray(parsed.metrics) ? parsed.metrics : [],
+      analysis:   parsed.analysis,
+      flags:      Array.isArray(parsed.flags) ? parsed.flags : [],
+      queriedBy:  address,
+      timestamp:  Date.now(),
+    }
+    return res.status(200).json(safe)
 
   } catch (e: any) {
     console.error('Query error:', e?.message)
-    return res.status(500).json({ error: 'Analysis failed — please try again', detail: e?.message })
+    // HIGH-1 FIX: never leak internal error detail to client
+    return res.status(500).json({ error: 'Analysis failed — please try again' })
   }
 }
