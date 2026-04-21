@@ -58,12 +58,14 @@ export default function Report() {
 
   const { tool, input, result } = data
   const label = TOOL_LABELS[tool] || '⚡ Analysis Report'
+  // NEW-3 FIX: HTML-escape decoded input before injecting into meta attributes
+  const safeInput = (input || '').replace(/[&"<>]/g, (c: string) => ({'&':'&amp;','"':'&quot;','<':'&lt;','>':'&gt;'}[c] || c))
 
   return (
     <>
       <Head>
         <title>{label} | Lion X</title>
-        <meta name="description" content={`Lion X AI ${label} for ${input}`}/>
+        <meta name="description" content={`Lion X AI ${label} for ${safeInput}`}/>
         <meta property="og:title" content={`${label} — Lion X AI Platform`}/>
         <meta property="og:description" content={`${result?.verdict || ''} — Analyzed by Lion X AI on Tron`}/>
       </Head>

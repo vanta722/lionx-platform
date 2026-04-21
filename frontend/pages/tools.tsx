@@ -45,8 +45,9 @@ export default function Tools() {
 
   function shareReport() {
     if (!result || result.error) return
-    // MED-2: share URL is public — strip wallet address, only include result + tool
-    const encoded = btoa(JSON.stringify({ tool: tool.id, result }))
+    // NEW-2 FIX: strip queriedBy + timestamp before encoding — no wallet in share URL
+    const { queriedBy: _q, timestamp: _t, ...shareResult } = result
+    const encoded = btoa(JSON.stringify({ tool: tool.id, result: shareResult }))
     navigator.clipboard.writeText(`${window.location.origin}/report?d=${encoded}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -54,8 +55,9 @@ export default function Tools() {
 
   function shareToX() {
     if (!result || result.error) return
-    // MED-2: don't include wallet address in public share URL
-    const encoded = btoa(JSON.stringify({ tool: tool.id, result }))
+    // NEW-2 FIX: strip queriedBy + timestamp from tweet share too
+    const { queriedBy: _q2, timestamp: _t2, ...tweetResult } = result
+    const encoded = btoa(JSON.stringify({ tool: tool.id, result: tweetResult }))
     const url     = `${window.location.origin}/report?d=${encoded}`
     const score   = result.score || ''
     const verdict = result.verdict || ''

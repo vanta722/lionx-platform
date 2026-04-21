@@ -137,13 +137,13 @@ async function getTokenData(nameOrAddress: string) {
 }
 
 const SYSTEM_PROMPT = `You are an expert Tron blockchain analyst for the Lion X platform.
-You ONLY use data provided to you — never invent or estimate values not in the data.
+You ONLY use data provided to you - never invent or estimate values not in the data.
 Be direct, specific, and opinionated. Reference exact numbers. No filler, no hedging.
-Return ONLY valid JSON — no markdown, no text outside the JSON object.`
+Return ONLY valid JSON - no markdown, no text outside the JSON object.`
 
 const TOOL_PROMPTS: Record<string, (input: string, data: any) => string> = {
   WALLET_ANALYZER: (addr, data) => `
-Analyze this Tron wallet. Use ONLY the numbers provided — reference them directly in your output.
+Analyze this Tron wallet. Use ONLY the numbers provided - reference them directly in your output.
 
 Wallet: ${addr}
 Data: ${JSON.stringify(data, null, 2)}
@@ -228,7 +228,7 @@ IMPORTANT CALCULATIONS to include in analysis:
 - Transfer velocity = totalTransfers ÷ days since issued (calculate this and state it)
 - If holders < 500 after >2 years: call it out as slow community growth
 - If transfers24h = 0: state it directly as zero activity today
-- If isListedWithPrice = false: say "Not exchange listed" — do NOT say N/A for price, say "Not Listed"
+- If isListedWithPrice = false: say "Not exchange listed" - do NOT say N/A for price, say "Not Listed"
 
 Scoring:
 - 70-100: >1000 holders OR exchange listed with volume
@@ -272,6 +272,10 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   }
   if (entry.count >= RATE_LIMIT) return { allowed: false, remaining: 0 }
   entry.count++
+  // NEW-4 FIX: prune stale entries to prevent memory leak
+  if (rateLimitMap.size > 5000) {
+    Array.from(rateLimitMap.entries()).forEach(([k, v]) => { if (now > v.resetAt) rateLimitMap.delete(k) })
+  }
   return { allowed: true, remaining: RATE_LIMIT - entry.count }
 }
 
@@ -288,7 +292,7 @@ async function isReplay(txHash: string): Promise<boolean> {
   if (kvUrl && kvToken) {
     try {
       const key = `lionx:used:${txHash}`
-      // SET key 1 EX 1200 NX — only sets if not exists, TTL 20 min
+      // SET key 1 EX 1200 NX - only sets if not exists, TTL 20 min
       const setRes = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/1200/nx`, {
         headers: { Authorization: `Bearer ${kvToken}` }
       })
@@ -313,7 +317,7 @@ async function isReplay(txHash: string): Promise<boolean> {
 const LDA_TOKEN     = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 const TREASURY_ADDR = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
 
-// Tool minimum costs (LDA) — must match frontend TOOLS array
+// Tool minimum costs (LDA) - must match frontend TOOLS array
 const TOOL_COSTS: Record<string, number> = {
   WALLET_ANALYZER:  50,
   CONTRACT_AUDITOR: 100,
@@ -346,7 +350,7 @@ async function checkWalletCooldown(address: string, tool: string): Promise<boole
 }
 
 // Look up the most recent LDA transfer FROM wallet TO treasury (within last 5 min)
-// No txHash needed — server-side Tronscan lookup is more reliable than client-side hash
+// No txHash needed - server-side Tronscan lookup is more reliable than client-side hash
 async function lookupAndVerify(
   fromWallet: string,
   tool: string
@@ -380,14 +384,14 @@ async function lookupAndVerify(
           continue
         }
 
-        // HIGH-2 FIX: verify the toAddress in the event matches treasury
+        // HIGH-2 FIX (hardened): empty string also fails the check
         const to = (evt.transferToAddress || evt.to_address || '').toLowerCase()
-        if (to && to !== TREASURY_ADDR.toLowerCase()) {
-          console.log(`[lionx] skip: toAddress ${to} !== treasury`)
+        if (!to || to !== TREASURY_ADDR.toLowerCase()) {
+          console.log(`[lionx] skip: toAddress '${to}' !== treasury`)
           continue
         }
 
-        // Check replay (now async — uses KV if available)
+        // Check replay (now async - uses KV if available)
         const txHash = evt.transactionHash || `${from}-${ts}`
         if (await isReplay(txHash)) { console.log(`[lionx] skip: replay ${txHash}`); continue }
 
@@ -398,10 +402,10 @@ async function lookupAndVerify(
       if (attempt < 4) await new Promise(r => setTimeout(r, 3500))
     }
 
-    return { valid: false, reason: 'Payment not found — make sure you sent LDA to the treasury and try again in a few seconds' }
+    return { valid: false, reason: 'Payment not found - make sure you sent LDA to the treasury and try again in a few seconds' }
   } catch (e: any) {
     console.error('[lionx] verify error:', e.message)
-    return { valid: false, reason: 'Verification service unavailable — please retry' }
+    return { valid: false, reason: 'Verification service unavailable - please retry' }
   }
 }
 
@@ -413,7 +417,7 @@ const ALLOWED_ORIGINS = [
 ]
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS — only allow requests from our own frontend
+  // CORS - only allow requests from our own frontend
   const origin = req.headers.origin || ''
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
@@ -430,34 +434,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
   const rateCheck = checkRateLimit(ip)
   if (!rateCheck.allowed) {
-    return res.status(429).json({ error: 'Rate limit exceeded — max 10 queries per minute' })
+    return res.status(429).json({ error: 'Rate limit exceeded - max 10 queries per minute' })
   }
 
   const { tool, input, address, sig, nonce } = req.body
 
-  // ── CRIT-1 FIX: address is required — no empty-address free rides ──────────
+  // ── CRIT-1 FIX: address is required - no empty-address free rides ──────────
   if (!tool || !input || !address) {
     return res.status(400).json({ error: 'Missing required fields: tool, input, address' })
   }
 
-  // ── MED-1 FIX: verify wallet signature proves ownership ──────────────────
-  if (sig && nonce) {
-    try {
-      // Verify nonce is fresh (< 3 minutes old)
-      const nonceTs = parseInt((nonce as string).split(':')[2] || '0', 10)
-      if (Date.now() - nonceTs > 3 * 60 * 1000) {
-        return res.status(400).json({ error: 'Signature expired — please try again' })
-      }
-      // Recover signer address from signature
-      const tw = new TronWeb({ fullHost: 'https://api.trongrid.io' })
-      const recovered = await tw.trx.verifyMessageV2(nonce as string, sig as string)
-      if (recovered?.toLowerCase() !== address.toLowerCase()) {
-        return res.status(403).json({ error: 'Signature mismatch — wallet ownership not verified' })
-      }
-    } catch (e: any) {
-      console.error('[lionx] sig verify error:', e?.message)
-      // Non-fatal for now: log but don’t block (some mobile wallets may not support signMessageV2)
+  // ── MED-1 FIX (enforced): sig + nonce now required — not optional ─────────
+  if (!sig || !nonce) {
+    return res.status(400).json({ error: 'Missing required fields: tool, input, address, sig, nonce' })
+  }
+  try {
+    const nonceTs = parseInt((nonce as string).split(':')[2] || '0', 10)
+    if (Date.now() - nonceTs > 3 * 60 * 1000) {
+      return res.status(400).json({ error: 'Signature expired — please try again' })
     }
+    const tw = new TronWeb({ fullHost: 'https://api.trongrid.io' })
+    const recovered = await tw.trx.verifyMessageV2(nonce as string, sig as string)
+    if (recovered?.toLowerCase() !== address.toLowerCase()) {
+      return res.status(403).json({ error: 'Signature mismatch — wallet ownership not verified' })
+    }
+  } catch (e: any) {
+    console.error('[lionx] sig verify error:', e?.message)
+    return res.status(400).json({ error: 'Signature verification failed — please try again' })
   }
 
   // ── HIGH-3 FIX: validate input length and address format ───────────────────
@@ -470,15 +473,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid wallet address' })
   }
 
-  // ── Per-wallet cooldown (CRIT-3 fix — actually enforced now) ───────────────
+  // Look up recent LDA payment on-chain
+  const verification = await lookupAndVerify(address, tool)
+  if (!verification.valid) return res.status(403).json({ error: verification.reason })
+
+  // ── CRIT-3 FIX: cooldown AFTER payment confirmed — prevents wallet-lockout DoS
   const onCooldown = await checkWalletCooldown(address, tool)
   if (onCooldown) {
     return res.status(429).json({ error: 'Please wait 5 minutes before running the same tool again' })
   }
-
-  // Look up recent LDA payment on-chain
-  const verification = await lookupAndVerify(address, tool)
-  if (!verification.valid) return res.status(403).json({ error: verification.reason })
 
   const promptFn = TOOL_PROMPTS[tool]
   if (!promptFn) return res.status(400).json({ error: 'Unknown tool' })
@@ -490,7 +493,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (tool === 'CONTRACT_AUDITOR') onChainData = await getContractData(cleanInput)
     if (tool === 'MARKET_INTEL')     onChainData = await getTokenData(cleanInput)
 
-    const prompt = promptFn(input, onChainData)
+    // NEW-1 FIX: use cleanInput in prompt — not raw input (prompt injection prevention)
+    const prompt = promptFn(cleanInput, onChainData)
 
     // Call OpenRouter
     const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -521,7 +525,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Parse and return
     const parsed = JSON.parse(content)
 
-    // HIGH-5 FIX: whitelist AI response fields — never spread unknown keys to client
+    // HIGH-5 FIX: whitelist AI response fields - never spread unknown keys to client
     const safe = {
       score:      parsed.score,
       scoreLabel: parsed.scoreLabel,
@@ -538,6 +542,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (e: any) {
     console.error('Query error:', e?.message)
     // HIGH-1 FIX: never leak internal error detail to client
-    return res.status(500).json({ error: 'Analysis failed — please try again' })
+    return res.status(500).json({ error: 'Analysis failed - please try again' })
   }
 }
