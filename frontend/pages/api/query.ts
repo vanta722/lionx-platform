@@ -43,16 +43,38 @@ const KNOWN_TOKENS: Record<string, string> = {
 
 async function getTokenData(nameOrAddress: string) {
   try {
-    const upper = nameOrAddress.trim().toUpperCase()
-    // Resolve common ticker names to known contract addresses
+    const upper    = nameOrAddress.trim().toUpperCase()
     const resolved = KNOWN_TOKENS[upper] || nameOrAddress.trim()
     const isAddr   = resolved.startsWith('T') && resolved.length > 30
     const url      = isAddr
       ? `https://apilist.tronscanapi.com/api/token_trc20?contract=${resolved}`
       : `https://apilist.tronscanapi.com/api/token_trc20?name=${encodeURIComponent(resolved)}&limit=5`
     const res  = await fetch(url)
-    const data = await res.json()
-    return { ...data, resolvedAddress: isAddr ? resolved : null, inputName: nameOrAddress }
+    const raw  = await res.json()
+    const t    = raw?.trc20_tokens?.[0] || null
+    if (!t) return { found: false, query: nameOrAddress }
+
+    // Return only the fields that are actually meaningful
+    return {
+      found:          true,
+      name:           t.name,
+      symbol:         t.symbol,
+      contract:       t.contract_address,
+      decimals:       t.decimals,
+      holders:        t.holders_count,
+      totalTransfers: t.transfer_num,
+      supply:         (Number(t.totalTurnOver) / Math.pow(10, t.decimals || 6)).toFixed(0),
+      volume24h:      t.volume24h || 0,
+      price_trx:      t.price_trx || 0,
+      price_usd:      t.price || 0,
+      marketCapUsd:   t.market_cap_usd || 0,
+      transfers24h:   t.transfer24h || 0,
+      issued:         t.issue_time,
+      issuer:         t.issue_address,
+      website:        t.home_page,
+      description:    t.token_desc,
+      isListedWithPrice: !!(t.price_trx && Number(t.price_trx) > 0),
+    }
   } catch { return null }
 }
 
@@ -117,28 +139,33 @@ Return a JSON object with exactly these fields:
 Return only the JSON.`,
 
   MARKET_INTEL: (token, data) => `
-Provide market intelligence for Tron token: ${token}
+You are a Tron blockchain analyst. Analyze this token using ONLY the data provided. Do NOT invent numbers.
+If a metric has no data, set its value to "N/A". Never fabricate price, volume, or liquidity values.
 
-Token data:
+Token queried: ${token}
+On-chain data:
 ${JSON.stringify(data, null, 2)}
+
+Base your score on what IS known: holder count, total transfers, token age, whether it has exchange listing.
+If isListedWithPrice is false, price/liquidity/volume are unknown — say "Not Listed" or "N/A".
 
 Return a JSON object with exactly these fields:
 {
-  "score": <number 0-100, market sentiment>,
-  "scoreLabel": "SENTIMENT SCORE",
-  "verdict": "<emoji + verdict e.g. '📈 Cautiously Bullish' or '📉 Bearish Pressure' or '➡ Neutral'>",
-  "type": "<market condition: Accumulation | Distribution | Consolidation | Breakout | Decline>",
+  "score": <0-100 based on holder activity, transfer history, token age>,
+  "scoreLabel": "COMMUNITY SCORE",
+  "verdict": "<emoji + honest verdict e.g. '🔥 Active Community' or '⚠ Low On-Chain Activity' or '📊 Established Token'>",
+  "type": "<Exchange Listed | Community Token | New Token | Inactive Token>",
   "metrics": [
-    {"label": "Holders",       "value": "<value>",          "color": "#14b8a6"},
-    {"label": "Liquidity",     "value": "$<value>",         "color": "#f5a623"},
-    {"label": "24h Volume",    "value": "$<value>",         "color": "#14b8a6"},
-    {"label": "Buy Pressure",  "value": "Low|Med|High",     "color": "<appropriate>"},
-    {"label": "Holder Trend",  "value": "<+/- %>",          "color": "<appropriate>"},
-    {"label": "Supply Float",  "value": "<value>%",         "color": "#f5a623"}
+    {"label": "Holders",     "value": "<holders or N/A>",          "color": "#14b8a6"},
+    {"label": "Transfers",   "value": "<totalTransfers or N/A>",    "color": "#f5a623"},
+    {"label": "24h Txns",    "value": "<transfers24h or N/A>",      "color": "#14b8a6"},
+    {"label": "Price",       "value": "<price_usd or Not Listed>",  "color": "#f5a623"},
+    {"label": "Market Cap",  "value": "<marketCapUsd or N/A>",      "color": "#14b8a6"},
+    {"label": "Token Age",   "value": "<years/months since issued>", "color": "#22c55e"}
   ],
-  "analysis": "<3-4 sentence market intelligence with key data highlighted>",
+  "analysis": "<3-4 sentences of honest analysis. Reference only confirmed data. State clearly if price/liquidity data is unavailable.>",
   "flags": [
-    {"level": "ok|warn|risk", "text": "<signal>"}
+    {"level": "ok|warn|risk", "text": "<specific factual observation from the data>"}
   ]
 }
 Return only the JSON.`,
