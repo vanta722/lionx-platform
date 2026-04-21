@@ -7,7 +7,7 @@ import Link from 'next/link'
 // ── Contract addresses ──────────────────────────────────────────
 const LDA_ADDR   = process.env.NEXT_PUBLIC_PLATFORM    || ''
 // MIGRATION_ADDR removed — using LDA v1 directly, no migration contract
-const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || '' // treasury wallet (set NEXT_PUBLIC_TREASURY in env)
+const TREASURY_ADDR  = process.env.NEXT_PUBLIC_TREASURY  || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
 const LDA_SUPPLY = 20_207_717 // LDA total supply
 // LDA supply is fixed — no new tokens minted
 const BURN_PERCENT = 70 // 70% burned per query, 30% treasury
@@ -146,16 +146,13 @@ export default function Dashboard() {
       const totalBurned = ldaEntry ? Number(ldaEntry.balance) / 1e6 : 1_050_000
       const circulating = totalSupply - totalBurned
 
-      let treasuryBal = 0
-      if (TREASURY_ADDR) {
-        const tRes  = await fetch(`https://apilist.tronscanapi.com/api/account?address=${TREASURY_ADDR}`)
-        const tData = await tRes.json()
-        // /api/account returns trc20token_balances with tokenAbbr field
-        const ldaTok = (tData?.trc20token_balances || []).find(
-          (t: any) => t.tokenAbbr === 'LDA' || t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
-        )
-        treasuryBal = ldaTok ? Number(ldaTok.balance) / 1e6 : 0
-      }
+      // Fetch treasury balance — /api/account works reliably for TRC20 token balances
+      const tRes  = await fetch(`https://apilist.tronscanapi.com/api/account?address=${TREASURY_ADDR}`)
+      const tData = await tRes.json()
+      const ldaTok = (tData?.trc20token_balances || []).find(
+        (t: any) => t.tokenAbbr === 'LDA' || t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+      )
+      const treasuryBal = ldaTok ? Number(ldaTok.balance) / 1e6 : 0
 
       const s: LiveStats = {
         platformActive:    true,
