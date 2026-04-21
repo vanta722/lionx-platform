@@ -25,15 +25,30 @@ async function getContractData(address: string) {
   } catch { return null }
 }
 
+// Well-known Tron token name → contract address lookup
+const KNOWN_TOKENS: Record<string, string> = {
+  'LDA':   'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'MANES': 'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
+  'TRX':   'TNUC9Qb1rRpN8sk6By25A2dGKGpgirBSEr',
+  'USDT':  'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  'USDC':  'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+  'BTT':   'TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4',
+  'SUN':   'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S',
+  'JST':   'TCFLL5dx5ZJdKnWuesXxi1VPwjLVmWZZy9',
+}
+
 async function getTokenData(nameOrAddress: string) {
   try {
-    const isAddr = nameOrAddress.startsWith('T') && nameOrAddress.length > 30
-    const url    = isAddr
-      ? `https://apilist.tronscanapi.com/api/token_trc20?contract=${nameOrAddress}`
-      : `https://apilist.tronscanapi.com/api/token_trc20?name=${nameOrAddress}&limit=5`
+    const upper = nameOrAddress.trim().toUpperCase()
+    // Resolve common ticker names to known contract addresses
+    const resolved = KNOWN_TOKENS[upper] || nameOrAddress.trim()
+    const isAddr   = resolved.startsWith('T') && resolved.length > 30
+    const url      = isAddr
+      ? `https://apilist.tronscanapi.com/api/token_trc20?contract=${resolved}`
+      : `https://apilist.tronscanapi.com/api/token_trc20?name=${encodeURIComponent(resolved)}&limit=5`
     const res  = await fetch(url)
     const data = await res.json()
-    return data
+    return { ...data, resolvedAddress: isAddr ? resolved : null, inputName: nameOrAddress }
   } catch { return null }
 }
 
