@@ -359,7 +359,7 @@ export default function Dashboard() {
             {[
               { icon:'💎', label:'Circulating',      val: fmtNum(stats.circulating),             sub:'Total supply minus burned',      color:'#14b8a6' },
               { icon:'🏦', label:'Treasury Balance', val: fmtNum(stats.treasuryBalance),         sub:'Platform revenue wallet',        color:'#a78bfa' },
-              { icon:'📊', label:'Burn Rate 24h',    val: fmtNum(stats.burnRate24h),             sub:'LDA burned via queries',         color:'#f5a623' },
+              { icon:'📊', label:'All-time Burns',    val: fmtNum(stats.burnRate24h),             sub:'Total LDA burned via queries',   color:'#f5a623' },
               { icon:'🔒', label:'Black Hole',       val: fmtNum(stats.burnedSupply),            sub:'TLsV52s... permanently locked',  color:'#ef4444' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-5" style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.12)' }}>
@@ -407,8 +407,7 @@ export default function Dashboard() {
                 {burns.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-2" style={{ color: '#4a5a6a' }}>
                     <span className="text-3xl opacity-30">🔥</span>
-                    <p className="text-xs">Waiting for first burn event...</p>
-                    <p className="text-xs opacity-60">Burns appear here in real-time once platform is live</p>
+                    <p className="text-xs text-center px-4">No queries yet — be the first to run an analysis at <a href="/tools" style={{ color: '#14b8a6', textDecoration: 'none' }}>lion-xai.com/tools</a></p>
                   </div>
                 ) : burns.map((b, i) => (
                   <div key={b.id} className="flex items-center justify-between px-5 py-3 transition-all"

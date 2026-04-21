@@ -35,8 +35,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAddress(addr)
       setConnected(true)
       await refreshBalance(addr)
-    } catch (e) {
-      console.error('Wallet connect error:', e)
+    } catch {
+      // silent — user cancelled or TronLink unavailable
     }
   }
 
@@ -46,7 +46,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const contract = await window.tronWeb.contract().at(LDA_V1)
       const bal = await contract.balanceOf(addr).call()
       setBalance(Number(bal) / 1e6)
-    } catch (e) { console.error('[lionx] balance fetch:', e) }
+    } catch { /* silent — contract call failed or wallet not ready */ }
     // getTier is platform contract only — skip on plain LDA token
     setTier(0)
   }

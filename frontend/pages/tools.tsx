@@ -202,7 +202,7 @@ export default function Tools() {
             </div>
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', padding: '12px 16px' }}>
               <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#4a5a6a' }}>Your Stats</div>
-              {[['LDA Balance', balance.toLocaleString(), '#14b8a6'],['Queries Run', history.length, '#f5a623']].map(([l,v,c]) => (
+              {[['LDA Balance', connected ? balance.toLocaleString() : '—', '#14b8a6'],['Queries Run', history.length, '#f5a623']].map(([l,v,c]) => (
                 <div key={l as string} className="mb-3">
                   <div className="text-xs mb-1" style={{ color: '#4a5a6a' }}>{l}</div>
                   <div className="text-lg font-black" style={{ color: c as string }}>{v as string|number}</div>

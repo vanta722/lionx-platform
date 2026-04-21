@@ -6,6 +6,15 @@ export default function LionHero() {
   const [loaded,    setLoaded]    = useState(false)
   const [scanning,  setScanning]  = useState(false)
   const [glitching, setGlitching] = useState(false)
+  const [isMobile,  setIsMobile]  = useState(false)
+
+  // Detect mobile after mount to avoid SSR/hydration mismatch
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768)
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Matrix rain
   useEffect(() => {
@@ -116,8 +125,6 @@ export default function LionHero() {
   }, [])
 
   // ── Mobile: static lightweight version (no canvas) ────────
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-
   if (isMobile) {
     return (
       <div className="flex flex-col items-center justify-center md:hidden" style={{ height: 220, width: '100%' }}>
@@ -149,7 +156,7 @@ export default function LionHero() {
 
       {/* HUD data readouts */}
       <div className="absolute top-5 left-10 text-left transition-all duration-1000" style={{ opacity: loaded ? 1 : 0 }}>
-        {['SYS: ONLINE', 'NET: TRON/SHASTA', 'TOKEN: LDA'].map((l, i) => (
+        {['SYS: ONLINE', 'NET: TRON/MAINNET', 'TOKEN: LDA'].map((l, i) => (
           <div key={l} className="font-mono text-xs mb-0.5" style={{ color: '#14b8a6', opacity: 0.6, animationDelay: `${i * 200}ms` }}>{l}</div>
         ))}
       </div>
