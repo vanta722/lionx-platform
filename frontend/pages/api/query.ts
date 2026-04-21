@@ -1,5 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+// Normalize raw timestamp (ms or seconds) → always ms
+function toMs(raw: any): number {
+  if (!raw) return 0
+  const n = Number(raw)
+  if (isNaN(n) || n <= 0) return 0
+  return n > 1e12 ? n : n * 1000
+}
+function msToDate(ms: number): string {
+  if (!ms) return 'Unknown'
+  try { return new Date(ms).toISOString().split('T')[0] } catch { return 'Unknown' }
+}
+function msToDays(ms: number): number {
+  if (!ms) return 0
+  return Math.max(0, Math.floor((Date.now() - ms) / 86400000))
+}
+
 // Fetch real on-chain data from Tronscan API
 async function getWalletData(address: string) {
   try {
@@ -12,11 +28,9 @@ async function getWalletData(address: string) {
 
     const trxBalance    = (acct?.balance || 0) / 1e6
     const totalTxns     = acct?.totalTransactionCount || 0
-    // date_created may be ms or seconds depending on API version — normalize
-    const rawCreated    = acct?.date_created || 0
-    const createdMs     = rawCreated > 1e12 ? rawCreated : rawCreated * 1000
-    const created       = createdMs ? new Date(createdMs).toISOString().split('T')[0] : 'Unknown'
-    const agedays       = createdMs ? Math.max(0, Math.floor((Date.now() - createdMs) / 86400000)) : 0
+    const createdMs  = toMs(acct?.date_created)
+    const created    = msToDate(createdMs)
+    const agedays    = msToDays(createdMs)
     const bw            = acct?.bandwidth || {}
     const netUsed       = bw.netUsed || 0
     const freeBW        = Math.max(0, 600 - netUsed) // 600 free daily bandwidth
@@ -55,7 +69,8 @@ async function getContractData(address: string) {
       verified:     !!(c?.verify_status || c?.isVerified),
       contractName: c?.name || c?.contract_name || t?.name || 'Unknown',
       creator:      c?.creator_address || c?.ownerAddress || 'Unknown',
-      created:      c?.date_created ? new Date(c.date_created * 1000).toISOString().split('T')[0] : 'Unknown',
+      created:      msToDate(toMs(c?.date_created)),
+      agedays:      msToDays(toMs(c?.date_created)),
       txCount:      c?.call_num || c?.trxCount || 0,
       trxBalance:   (c?.balance || 0) / 1e6,
       hasToken:     !!t,
@@ -110,7 +125,8 @@ async function getTokenData(nameOrAddress: string) {
       price_usd:      t.price || 0,
       marketCapUsd:   t.market_cap_usd || 0,
       transfers24h:   t.transfer24h || 0,
-      issued:         t.issue_time,
+      issued:         msToDate(toMs(t.issue_time)),
+      agedays:        msToDays(toMs(t.issue_time)),
       issuer:         t.issue_address,
       website:        t.home_page,
       description:    t.token_desc,
@@ -167,13 +183,15 @@ Return ONLY this JSON:
 Return only the JSON.`,
 
   CONTRACT_AUDITOR: (addr, data) => `
-Audit this Tron smart contract using ONLY the data provided. Reference exact numbers.
+Audit this Tron smart contract. Use ONLY the data provided.
 
 Contract: ${addr}
 Data: ${JSON.stringify(data, null, 2)}
 
+CRITICAL: Use the "agedays" field (integer, days old) directly. Do NOT attempt to parse the "created" string.
+
 Scoring:
-- Score 80+: verified=true AND txCount>1000 AND age>1 year
+- Score 80+: verified=true AND txCount>1000 AND agedays>365
 - Score 60-79: verified OR moderate activity
 - Score 40-59: unverified but some activity
 - Score 0-39: unverified, new, or no activity
@@ -182,19 +200,19 @@ Return ONLY this JSON:
 {
   "score": <0-100 per scoring guide>,
   "scoreLabel": "SAFETY SCORE",
-  "verdict": "<emoji + specific verdict referencing verified status and tx count>",
+  "verdict": "<emoji + specific verdict e.g. '\u2705 Verified LDA Contract, 1820 Days, 2082 Txns'>",
   "type": "<TRC-20 Token | DeFi Protocol | NFT Contract | Unknown Contract>",
   "metrics": [
-    {"label": "Verified",     "value": "<Yes or No>",              "color": "<#22c55e if yes, #ef4444 if no>"},
-    {"label": "Contract Name","value": "<contractName>",           "color": "#14b8a6"},
-    {"label": "Tx Count",     "value": "<exact txCount>",          "color": "#f5a623"},
-    {"label": "TRX Balance",  "value": "<exact trxBalance>",       "color": "#14b8a6"},
-    {"label": "Has Token",    "value": "<Yes (SYMBOL) or No>",     "color": "#a78bfa"},
-    {"label": "Token Holders","value": "<tokenHolders or N/A>",   "color": "#22c55e"}
+    {"label": "Verified",      "value": "<Yes or No>",              "color": "<#22c55e if yes, #ef4444 if no>"},
+    {"label": "Contract Name", "value": "<contractName>",           "color": "#14b8a6"},
+    {"label": "Tx Count",      "value": "<exact txCount>",          "color": "#f5a623"},
+    {"label": "Age",           "value": "<exact agedays> days",     "color": "#22c55e"},
+    {"label": "TRX Balance",   "value": "<exact trxBalance> TRX",   "color": "#14b8a6"},
+    {"label": "Token Holders", "value": "<tokenHolders or N/A>",   "color": "#a78bfa"}
   ],
-  "analysis": "<3-4 sentences with exact data: verification status, creator address, transaction count, contract age. Be specific and direct.>",
+  "analysis": "<3-4 sentences. Must reference: verification status, exact agedays, exact txCount, exact trxBalance. Be direct.>",
   "flags": [
-    {"level": "ok|warn|risk", "text": "<specific finding with actual data>"}
+    {"level": "ok|warn|risk", "text": "<specific finding with real numbers>"}
   ]
 }
 Return only the JSON.`,
