@@ -44,11 +44,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       if (!window.tronWeb || !LDA_V1) return
       const contract = await window.tronWeb.contract().at(LDA_V1)
-      const bal  = await contract.balanceOf(addr).call()
-      const tier = await contract.getTier(addr).call()
+      const bal = await contract.balanceOf(addr).call()
       setBalance(Number(bal) / 1e6)
-      setTier(Number(tier))
-    } catch {}
+    } catch (e) { console.error('[lionx] balance fetch:', e) }
+    // getTier is platform contract only — skip on plain LDA token
+    setTier(0)
   }
 
   function disconnect() {
