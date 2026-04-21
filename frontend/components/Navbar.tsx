@@ -66,7 +66,7 @@ export default function Navbar() {
             <button onClick={connect}
               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
               style={{ border: '1px solid #14b8a6', color: '#14b8a6', background: 'transparent', fontFamily: 'inherit' }}>
-              Connect
+              Connect Wallet
             </button>
           )}
 

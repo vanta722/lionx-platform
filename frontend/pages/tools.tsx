@@ -234,7 +234,7 @@ export default function Tools() {
                     onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: '#0c0c18' }}>
-                  {[['Tool Cost',`${tool.cost} LDA`],['Burn (70%)',`${Math.floor(tool.cost*.7)} LDA 🔥`],['Treasury (30%)',`${Math.ceil(tool.cost*.3)} LDA`],['Balance After',`${Math.max(0,balance-tool.cost).toLocaleString()} LDA`]].map(([k,v]) => (
+                  {[['Tool Cost',`${tool.cost} LDA`],['Burn (70%)',`${Math.floor(tool.cost*.7)} LDA 🔥`],['Treasury (30%)',`${Math.ceil(tool.cost*.3)} LDA`],['Balance After', connected ? `${Math.max(0,balance-tool.cost).toLocaleString()} LDA` : '—']].map(([k,v]) => (
                     <div key={k} className="flex justify-between text-xs py-2 border-b last:border-0" style={{ borderColor: 'rgba(255,255,255,0.04)', color: '#7a8a9a' }}>
                       <span>{k}</span><span className="font-bold" style={{ color: '#dde8f0' }}>{v}</span>
                     </div>
