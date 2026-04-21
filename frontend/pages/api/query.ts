@@ -502,6 +502,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (tool === 'CONTRACT_AUDITOR') onChainData = await getContractData(cleanInput)
     if (tool === 'MARKET_INTEL')     onChainData = await getTokenData(cleanInput)
 
+    // Guard: if Tronscan returned nothing, don't feed the AI null — return error instead
+    if (!onChainData || onChainData.found === false) {
+      return res.status(422).json({ error: 'Could not fetch on-chain data — address may be invalid, not found on Tron, or Tronscan is temporarily unavailable. Your LDA was not charged.' })
+    }
+
     // NEW-1 FIX: use cleanInput in prompt — not raw input (prompt injection prevention)
     const prompt = promptFn(cleanInput, onChainData)
 
@@ -531,17 +536,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!content) throw new Error('No AI response received')
 
-    // Parse and return
-    const parsed = JSON.parse(content)
+    // Parse and validate AI output
+    let parsed: any
+    try {
+      // Strip markdown code fences if model wraps in ```json
+      const cleaned = content.replace(/^```json\s*/i, '').replace(/```\s*$/,'').trim()
+      parsed = JSON.parse(cleaned)
+    } catch {
+      console.error('[lionx] AI returned invalid JSON:', content?.slice(0, 200))
+      return res.status(500).json({ error: 'Analysis failed — please try again' })
+    }
+
+    // Validate required fields are present and non-empty
+    if (!parsed.score || !parsed.verdict || !parsed.analysis) {
+      console.error('[lionx] AI response missing required fields:', Object.keys(parsed))
+      return res.status(500).json({ error: 'Incomplete analysis returned — please try again' })
+    }
 
     // HIGH-5 FIX: whitelist AI response fields - never spread unknown keys to client
     const safe = {
-      score:      parsed.score,
-      scoreLabel: parsed.scoreLabel,
-      verdict:    parsed.verdict,
-      type:       parsed.type,
+      score:      Number(parsed.score) || 0,
+      scoreLabel: parsed.scoreLabel || 'SCORE',
+      verdict:    String(parsed.verdict),
+      type:       parsed.type || 'Unknown',
       metrics:    Array.isArray(parsed.metrics) ? parsed.metrics : [],
-      analysis:   parsed.analysis,
+      analysis:   String(parsed.analysis),
       flags:      Array.isArray(parsed.flags) ? parsed.flags : [],
       queriedBy:  address,
       timestamp:  Date.now(),
