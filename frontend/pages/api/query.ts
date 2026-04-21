@@ -27,8 +27,12 @@ async function getContractData(address: string) {
 
 // Well-known Tron token name → contract address lookup
 const KNOWN_TOKENS: Record<string, string> = {
-  'LDA':   'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
-  'MANES': 'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
+  'LDA':                    'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'LION DIGITAL ALLIANCE':  'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'LION':                   'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'LIONX':                  'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'LION X':                 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1',
+  'MANES':                  'TXwXmQWu8e8zzfJSy5ptGRzi7fdgwYJz6d',
   'TRX':   'TNUC9Qb1rRpN8sk6By25A2dGKGpgirBSEr',
   'USDT':  'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
   'USDC':  'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
