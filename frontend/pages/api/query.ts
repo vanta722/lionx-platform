@@ -228,7 +228,7 @@ async function lookupAndVerify(
 ): Promise<{ valid: boolean; reason?: string; txHash?: string }> {
   try {
     const minCost = TOOL_COSTS[tool] || 25
-    const since   = Date.now() - 3 * 60 * 1000 // last 3 minutes (fresh payments only)
+    const since   = Date.now() - 10 * 60 * 1000 // last 10 minutes
 
     // Retry up to 4 times (Tronscan indexes new txs within ~10s)
     for (let attempt = 1; attempt <= 4; attempt++) {
