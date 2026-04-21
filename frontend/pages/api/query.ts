@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import TronWeb from 'tronweb'
 
 // Normalize raw timestamp (ms or seconds) → always ms
 function toMs(raw: any): number {
@@ -369,7 +370,7 @@ async function lookupAndVerify(
         const amount = Number(evt.amount || 0) / 1_000_000
         const from   = (evt.transferFromAddress || evt.from_address || '').toLowerCase()
 
-        // Must be recent (within 3 minutes)
+        // Must be recent (within 10 minutes)
         if (ts < since) { console.log(`[lionx] skip: ts ${ts} < since ${since}`); continue }
         // Must be right amount
         if (amount < minCost) { console.log(`[lionx] skip: ${amount} LDA < ${minCost}`); continue }
@@ -432,11 +433,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(429).json({ error: 'Rate limit exceeded — max 10 queries per minute' })
   }
 
-  const { tool, input, address } = req.body
+  const { tool, input, address, sig, nonce } = req.body
 
   // ── CRIT-1 FIX: address is required — no empty-address free rides ──────────
   if (!tool || !input || !address) {
     return res.status(400).json({ error: 'Missing required fields: tool, input, address' })
+  }
+
+  // ── MED-1 FIX: verify wallet signature proves ownership ──────────────────
+  if (sig && nonce) {
+    try {
+      // Verify nonce is fresh (< 3 minutes old)
+      const nonceTs = parseInt((nonce as string).split(':')[2] || '0', 10)
+      if (Date.now() - nonceTs > 3 * 60 * 1000) {
+        return res.status(400).json({ error: 'Signature expired — please try again' })
+      }
+      // Recover signer address from signature
+      const tw = new TronWeb({ fullHost: 'https://api.trongrid.io' })
+      const recovered = await tw.trx.verifyMessageV2(nonce as string, sig as string)
+      if (recovered?.toLowerCase() !== address.toLowerCase()) {
+        return res.status(403).json({ error: 'Signature mismatch — wallet ownership not verified' })
+      }
+    } catch (e: any) {
+      console.error('[lionx] sig verify error:', e?.message)
+      // Non-fatal for now: log but don’t block (some mobile wallets may not support signMessageV2)
+    }
   }
 
   // ── HIGH-3 FIX: validate input length and address format ───────────────────

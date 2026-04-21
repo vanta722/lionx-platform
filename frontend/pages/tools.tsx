@@ -45,7 +45,8 @@ export default function Tools() {
 
   function shareReport() {
     if (!result || result.error) return
-    const encoded = btoa(JSON.stringify({ tool: tool.id, input, result }))
+    // MED-2: share URL is public — strip wallet address, only include result + tool
+    const encoded = btoa(JSON.stringify({ tool: tool.id, result }))
     navigator.clipboard.writeText(`${window.location.origin}/report?d=${encoded}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -53,7 +54,8 @@ export default function Tools() {
 
   function shareToX() {
     if (!result || result.error) return
-    const encoded = btoa(JSON.stringify({ tool: tool.id, input, result }))
+    // MED-2: don't include wallet address in public share URL
+    const encoded = btoa(JSON.stringify({ tool: tool.id, result }))
     const url     = `${window.location.origin}/report?d=${encoded}`
     const score   = result.score || ''
     const verdict = result.verdict || ''
@@ -95,7 +97,16 @@ export default function Tools() {
       setRunState('running')
       await new Promise(r => setTimeout(r, 10000))
 
-      // Step 3: API verifies payment and runs AI analysis
+      // Step 3: Sign a nonce to prove wallet ownership (MED-1 fix)
+      const nonce = `lionx:${tool.id}:${Date.now()}`
+      let sig: string
+      try {
+        sig = await tw.trx.signMessageV2(nonce)
+      } catch (e: any) {
+        throw new Error('Signature rejected — please approve in TronLink to verify wallet ownership')
+      }
+
+      // Step 4: API verifies payment + signature and runs AI analysis
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 45000)
       let res: Response
@@ -103,7 +114,7 @@ export default function Tools() {
         res = await fetch('/api/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tool: tool.id, input, address }),
+          body: JSON.stringify({ tool: tool.id, input, address, sig, nonce }),
           signal: controller.signal,
         })
       } catch (e: any) {
@@ -118,7 +129,9 @@ export default function Tools() {
 
       setResult(data)
       setRunState('done')
-      setHistory(h => [{ tool: tool.name, input: input.slice(0,22)+'...', cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
+      // MED-3: don't store full address in history — mask middle chars
+      const maskedInput = input.length > 10 ? input.slice(0,6) + '...' + input.slice(-4) : input
+      setHistory(h => [{ tool: tool.name, input: maskedInput, cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
     } catch (e: any) {
       setRunState('error')
       setResult({ error: String(e?.message || e || 'Unknown error') })
