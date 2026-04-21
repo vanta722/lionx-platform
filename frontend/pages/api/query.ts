@@ -12,10 +12,11 @@ async function getWalletData(address: string) {
 
     const trxBalance    = (acct?.balance || 0) / 1e6
     const totalTxns     = acct?.totalTransactionCount || 0
-    // date_created is in milliseconds on this endpoint
-    const createdMs     = acct?.date_created || 0
+    // date_created may be ms or seconds depending on API version — normalize
+    const rawCreated    = acct?.date_created || 0
+    const createdMs     = rawCreated > 1e12 ? rawCreated : rawCreated * 1000
     const created       = createdMs ? new Date(createdMs).toISOString().split('T')[0] : 'Unknown'
-    const agedays       = createdMs ? Math.floor((Date.now() - createdMs) / 86400000) : 0
+    const agedays       = createdMs ? Math.max(0, Math.floor((Date.now() - createdMs) / 86400000)) : 0
     const bw            = acct?.bandwidth || {}
     const netUsed       = bw.netUsed || 0
     const freeBW        = Math.max(0, 600 - netUsed) // 600 free daily bandwidth
