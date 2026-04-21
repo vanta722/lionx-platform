@@ -133,9 +133,10 @@ async function getTokenData(nameOrAddress: string) {
       price_usd:      t.price || 0,
       marketCapUsd:   t.market_cap_usd || 0,
       transfers24h:   t.transfer24h || 0,
-      // issue_time is 0 for some tokens — fall back to date_created
-      issued:         msToDate(toMs(t.issue_time || t.date_created)),
-      agedays:        msToDays(toMs(t.issue_time || t.date_created)),
+      // issue_time is a string ("2024-09-12..."), issue_ts is numeric but often 0
+      // date_created is the most reliable numeric timestamp — use it as primary fallback
+      issued:         msToDate(toMs(t.issue_ts || t.date_created)),
+      agedays:        msToDays(toMs(t.issue_ts || t.date_created)),
       issuer:         t.issue_address,
       website:        t.home_page,
       description:    t.token_desc,
