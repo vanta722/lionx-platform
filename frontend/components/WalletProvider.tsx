@@ -20,7 +20,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [tier,      setTier]      = useState(0)
   const [connected, setConnected] = useState(false)
 
-  const LDA_V1 = process.env.NEXT_PUBLIC_LDA_V1 || ''
+  const LDA_V1 = process.env.NEXT_PUBLIC_LDA_V1 || 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 
   async function connect() {
     try {
