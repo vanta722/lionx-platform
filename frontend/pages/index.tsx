@@ -110,7 +110,8 @@ export default function Home() {
         const burnAccountData = await burnAccountRes.json()
 
         const token = tokenData?.trc20_tokens?.[0]
-        if (token) setHolders(Number(token.holder_count || 281))
+        // Tronscan uses holders_count + transfer_num (not holder_count / transfer_count)
+        if (token) setHolders(Number(token.holders_count || token.holder_count || 282))
 
         // Find LDA in black hole token balances — real burned supply
         const ldaEntry = burnAccountData?.trc20token_balances?.find(

@@ -134,7 +134,9 @@ export default function Dashboard() {
       const burnAccountData = await burnAccountRes.json()
 
       const token      = tokenData?.trc20_tokens?.[0]
-      const holders    = Number(token?.holder_count || 281)
+      // Tronscan uses holders_count + transfer_num (not holder_count / transfer_count)
+      const holders    = Number(token?.holders_count || token?.holder_count || 282)
+      const transfers  = Number(token?.transfer_num  || token?.transfer_count || 0)
       const totalSupply = Number(token?.total_supply_with_decimals || 0) / 1e6 || LDA_SUPPLY
 
       // Find LDA in black hole's token balances
@@ -146,9 +148,12 @@ export default function Dashboard() {
 
       let treasuryBal = 0
       if (TREASURY_ADDR) {
-        const tRes = await fetch(`https://apilist.tronscanapi.com/api/account/tokens?address=${TREASURY_ADDR}&token=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1`)
+        const tRes  = await fetch(`https://apilist.tronscanapi.com/api/accountv2?address=${TREASURY_ADDR}`)
         const tData = await tRes.json()
-        treasuryBal = Number(tData?.data?.[0]?.quantity || 0) / 1e6
+        const ldaTok = (tData?.trc20token_balances || []).find(
+          (t: any) => t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+        )
+        treasuryBal = ldaTok ? Number(ldaTok.balance) / 1e6 : 0
       }
 
       const s: LiveStats = {

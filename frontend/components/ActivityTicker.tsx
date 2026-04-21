@@ -1,11 +1,12 @@
 /**
  * ActivityTicker — Live burn activity feed
- * Polls Tronscan for real QueryExecuted events every 15s
+ * Polls Tronscan for real LDA transfers to treasury every 15s
  * Falls back to demo events if no real activity yet
  */
 import { useEffect, useRef, useState } from 'react'
 
-const PLATFORM = process.env.NEXT_PUBLIC_PLATFORM || 'TYKu4AJv6cqNwoyZtnjzpsyE9Tf5WkLQhh'
+const TREASURY = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
+const LDA_TOKEN = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
 
 interface TickerEvent {
   id:     string
@@ -43,31 +44,40 @@ export default function ActivityTicker() {
 
     async function poll() {
       try {
+        // Poll real LDA transfers to treasury — this is how users pay for tools
         const res  = await fetch(
-          `https://apilist.tronscanapi.com/api/contract/events?address=${PLATFORM}&event_name=QueryExecuted&limit=10`
+          `https://apilist.tronscanapi.com/api/contract/events?contract=${LDA_TOKEN}&toAddress=${TREASURY}&limit=10`
         )
         const data = await res.json()
         const evs  = data?.data || []
         if (!evs.length) return
 
         const fresh: TickerEvent[] = []
+        const now = Date.now()
         for (const ev of evs) {
-          const txHash = ev.transaction_id || ev.transactionId
+          const txHash = ev.transactionHash || ev.transaction_id
           if (!txHash || seen.has(txHash)) continue
           seen.add(txHash)
 
-          const caller  = ev.result?.user || 'Unknown'
-          const toolHex = ev.result?.toolId || ''
+          const from   = ev.transferFromAddress || ev.from_address || ''
+          const amount = Number(ev.amount || 0) / 1e6
+          const ts     = Number(ev.timestamp || 0)
+
+          // Infer tool from amount
           let tool = 'WALLET_ANALYZER'
-          if (toolHex.includes('CONTRACT') || toolHex.includes('AUDIT')) tool = 'CONTRACT_AUDITOR'
-          else if (toolHex.includes('MARKET') || toolHex.includes('INTEL'))  tool = 'MARKET_INTEL'
+          if (amount >= 100)     tool = 'CONTRACT_AUDITOR'
+          else if (amount <= 25) tool = 'MARKET_INTEL'
+
+          // Human-readable time
+          const diffMin = ts ? Math.floor((now - ts) / 60000) : 0
+          const time = diffMin < 1 ? 'Just now' : diffMin < 60 ? `${diffMin}m ago` : `${Math.floor(diffMin/60)}h ago`
 
           fresh.push({
             id:     txHash,
-            wallet: caller.length > 10 ? caller.slice(0,6)+'...'+caller.slice(-4) : caller,
+            wallet: from.length > 10 ? from.slice(0,6)+'...'+from.slice(-4) : from || 'Unknown',
             tool:   TOOL_LABELS[tool] || 'AI Tool',
-            amount: TOOL_COSTS[tool] || 50,
-            time:   'Just now',
+            amount,
+            time,
           })
         }
         if (fresh.length) setEvents(e => [...fresh, ...e].slice(0, 30))
