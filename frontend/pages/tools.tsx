@@ -170,7 +170,7 @@ export default function Tools() {
       {/* ── Desktop layout ─────────────────────────────────────── */}
       <div className="hidden md:flex flex-col" style={{ height: '100vh', background: '#050508', overflow: 'hidden' }}>
         <Navbar/>
-        <div className="flex flex-1 overflow-hidden" style={{ paddingTop: 60 }}>
+        <div className="flex flex-1 overflow-hidden" style={{ paddingTop: 96 }}>
 
           {/* Sidebar */}
           <div className="flex flex-col flex-shrink-0 overflow-y-auto" style={{ width: 220, background: '#08080f', borderRight: '1px solid rgba(20,184,166,0.1)' }}>
