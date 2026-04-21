@@ -18,11 +18,18 @@ function msToDays(ms: number): number {
 }
 
 // Fetch real on-chain data from Tronscan API
+// Shared 10s timeout for all Tronscan fetches
+function tronscanFetch(url: string): Promise<Response> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 10000)
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer))
+}
+
 async function getWalletData(address: string) {
   try {
     const [acctRes, txRes] = await Promise.all([
-      fetch(`https://apilist.tronscanapi.com/api/account?address=${address}`),
-      fetch(`https://apilist.tronscanapi.com/api/transaction?address=${address}&limit=20&start=0`)
+      tronscanFetch(`https://apilist.tronscanapi.com/api/account?address=${address}`),
+      tronscanFetch(`https://apilist.tronscanapi.com/api/transaction?address=${address}&limit=20&start=0`)
     ])
     const acct = await acctRes.json()
     const txs  = await txRes.json()
@@ -57,8 +64,8 @@ async function getWalletData(address: string) {
 async function getContractData(address: string) {
   try {
     const [tokenRes, contractRes] = await Promise.all([
-      fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${address}`),
-      fetch(`https://apilist.tronscanapi.com/api/contract?contract=${address}`)
+      tronscanFetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${address}`),
+      tronscanFetch(`https://apilist.tronscanapi.com/api/contract?contract=${address}`)
     ])
     const tokenData    = await tokenRes.json()
     const contractData = await contractRes.json()
@@ -106,7 +113,7 @@ async function getTokenData(nameOrAddress: string) {
     const url      = isAddr
       ? `https://apilist.tronscanapi.com/api/token_trc20?contract=${resolved}`
       : `https://apilist.tronscanapi.com/api/token_trc20?name=${encodeURIComponent(resolved)}&limit=5`
-    const res  = await fetch(url)
+    const res  = await tronscanFetch(url)
     const raw  = await res.json()
     const t    = raw?.trc20_tokens?.[0] || null
     if (!t) return { found: false, query: nameOrAddress }
@@ -361,7 +368,7 @@ async function lookupAndVerify(
 
     // Retry up to 4 times (Tronscan indexes new txs within ~10s)
     for (let attempt = 1; attempt <= 4; attempt++) {
-      const res = await fetch(
+      const res = await tronscanFetch(
         `https://apilist.tronscanapi.com/api/contract/events?contract=${LDA_TOKEN}&toAddress=${TREASURY_ADDR}&limit=20`
       )
       if (!res.ok) { await new Promise(r => setTimeout(r, 3000)); continue }
