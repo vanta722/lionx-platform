@@ -84,7 +84,7 @@ export default function Tools() {
       const amount = (tool.cost * 1_000_000).toString()
       let sendResult: any
       try {
-        sendResult = await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
+        sendResult = await lda.transfer(TREASURY, amount).send({ feeLimit: 15_000_000 })
       } catch (e: any) {
         const msg = e?.message || e?.error || JSON.stringify(e)
         throw new Error(`Transfer failed: ${msg}`)
