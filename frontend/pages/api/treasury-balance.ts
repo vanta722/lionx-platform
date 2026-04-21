@@ -45,6 +45,8 @@ async function fetchFromTronscan(): Promise<number | null> {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Access-Control-Allow-Origin', '*') // public read-only data — safe to expose
+  res.setHeader('Access-Control-Allow-Methods', 'GET')
 
   const kvUrl   = process.env.KV_REST_API_URL
   const kvToken = process.env.KV_REST_API_TOKEN
