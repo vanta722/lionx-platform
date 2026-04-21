@@ -310,9 +310,9 @@ export default function Tools() {
             <button onClick={connect} className="w-full py-4 rounded-xl font-extrabold text-base mb-4" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>
               Connect TronLink Wallet
             </button>
-          ) : runState === 'idle' || runState === 'error' ? (
-            <button onClick={runQuery} disabled={!input.trim()} className="w-full py-4 rounded-xl font-extrabold text-base mb-4 disabled:opacity-40" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>
-              ⚡ Run {tool.shortName} Analysis
+          ) : runState === 'idle' || runState === 'error' || runState === 'done' ? (
+            <button onClick={runQuery} disabled={!input.trim()} className="w-full py-4 rounded-xl font-extrabold text-base mb-4 disabled:opacity-40" style={{ background: runState === 'done' ? 'rgba(20,184,166,0.15)' : 'linear-gradient(135deg,#14b8a6,#0d9488)', color: runState === 'done' ? '#14b8a6' : '#000', border: runState === 'done' ? '1px solid rgba(20,184,166,0.3)' : 'none', fontFamily:'inherit' }}>
+              {runState === 'done' ? '🔄 Run New Analysis' : `⚡ Run ${tool.shortName} Analysis`}
             </button>
           ) : (
             <button disabled className="w-full py-4 rounded-xl font-extrabold text-base mb-4 flex items-center justify-center gap-3" style={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6', border:'none', fontFamily:'inherit' }}>
