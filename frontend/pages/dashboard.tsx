@@ -148,10 +148,11 @@ export default function Dashboard() {
 
       let treasuryBal = 0
       if (TREASURY_ADDR) {
-        const tRes  = await fetch(`https://apilist.tronscanapi.com/api/accountv2?address=${TREASURY_ADDR}`)
+        const tRes  = await fetch(`https://apilist.tronscanapi.com/api/account?address=${TREASURY_ADDR}`)
         const tData = await tRes.json()
+        // /api/account returns trc20token_balances with tokenAbbr field
         const ldaTok = (tData?.trc20token_balances || []).find(
-          (t: any) => t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+          (t: any) => t.tokenAbbr === 'LDA' || t.tokenId === 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
         )
         treasuryBal = ldaTok ? Number(ldaTok.balance) / 1e6 : 0
       }
