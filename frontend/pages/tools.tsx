@@ -69,38 +69,59 @@ export default function Tools() {
     setResult(null)
     try {
       const tw = (window as any).tronWeb
-      if (!tw) throw new Error('TronLink not connected')
+      if (!tw) throw new Error('TronLink not found — open in TronLink browser')
+      if (!tw.defaultAddress?.base58) throw new Error('Wallet not connected — unlock TronLink first')
 
-      // Direct LDA transfer to treasury — no smart contract needed
-      // User sends exact tool cost in LDA, API verifies on Tronscan, returns AI result
-      const lda      = await tw.contract().at(LDA_V1)
-      const amount   = (tool.cost * 1_000_000).toString() // LDA has 6 decimals
+      // Step 1: Send LDA transfer
+      setRunState('sending')
+      let lda: any
+      try {
+        lda = await tw.contract().at(LDA_V1)
+      } catch (e: any) {
+        throw new Error('Could not load LDA contract — check network is set to Mainnet')
+      }
+
+      const amount = (tool.cost * 1_000_000).toString()
+      let sendResult: any
+      try {
+        sendResult = await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
+      } catch (e: any) {
+        const msg = e?.message || e?.error || JSON.stringify(e)
+        throw new Error(`Transfer failed: ${msg}`)
+      }
+      if (!sendResult) throw new Error('Transfer rejected — please approve in TronLink')
+
+      // Step 2: Wait for block confirmation
       setRunState('running')
-      // Send LDA to treasury — don't rely on txHash from TronLink (format varies by client)
-      await lda.transfer(TREASURY, amount).send({ feeLimit: 100_000_000 })
-
-      // Wait for Tron block confirmation (~3s blocks, wait 10s to be safe)
       await new Promise(r => setTimeout(r, 10000))
 
-      // API looks up the latest transaction from this wallet to treasury
-      // No txHash needed — server-side lookup is more reliable
+      // Step 3: API verifies payment and runs AI analysis
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 45000)
-      const res = await fetch('/api/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: tool.id, input, address, expectedAmount: tool.cost }),
-        signal: controller.signal,
-      })
+      let res: Response
+      try {
+        res = await fetch('/api/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool: tool.id, input, address }),
+          signal: controller.signal,
+        })
+      } catch (e: any) {
+        clearTimeout(timeout)
+        throw new Error(e?.name === 'AbortError' ? 'Analysis timed out — try again' : `Network error: ${e?.message}`)
+      }
       clearTimeout(timeout)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `Error ${res.status} — please try again`)
+
+      let data: any
+      try { data = await res.json() } catch { throw new Error(`Server error ${res.status}`) }
+      if (!res.ok) throw new Error(data?.error || `API error ${res.status}`)
+
       setResult(data)
       setRunState('done')
       setHistory(h => [{ tool: tool.name, input: input.slice(0,22)+'...', cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
     } catch (e: any) {
       setRunState('error')
-      setResult({ error: e?.message || 'Query failed' })
+      setResult({ error: String(e?.message || e || 'Unknown error') })
     }
   }
 
