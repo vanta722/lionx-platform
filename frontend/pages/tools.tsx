@@ -242,6 +242,15 @@ export default function Tools() {
                 </div>
                 {!connected ? (
                   <button onClick={connect} className="w-full py-3.5 rounded-xl font-extrabold text-sm" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>Connect TronLink</button>
+                ) : connected && balance < tool.cost ? (
+                  <>
+                    <div className="rounded-xl p-3 text-xs text-center" style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: '#f5a623' }}>
+                      ⚠️ Need {tool.cost} LDA to run — you have {balance.toLocaleString()}
+                    </div>
+                    <a href="https://sunswap.com/?utm_source=tronlink#/v1?lang=en-US&t1=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1&t0=T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb&type=swap" target="_blank" rel="noopener noreferrer" className="w-full py-3.5 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg,#f5a623,#e8950f)', color: '#000', textDecoration:'none', fontFamily:'inherit' }}>
+                      🛒 Get LDA on SunSwap
+                    </a>
+                  </>
                 ) : runState === 'idle' || runState === 'error' ? (
                   <button onClick={runQuery} disabled={!input.trim()} className="w-full py-3.5 rounded-xl font-extrabold text-sm disabled:opacity-40" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>⚡ Run Analysis</button>
                 ) : (
@@ -343,6 +352,15 @@ export default function Tools() {
             <button onClick={connect} className="w-full py-4 rounded-xl font-extrabold text-base mb-4" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>
               Connect TronLink Wallet
             </button>
+          ) : connected && balance < tool.cost && runState !== 'done' ? (
+            <>
+              <div className="w-full py-3 rounded-xl text-xs font-bold text-center mb-2" style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: '#f5a623' }}>
+                ⚠️ Need {tool.cost} LDA — you have {balance.toLocaleString()}
+              </div>
+              <a href="https://sunswap.com/?utm_source=tronlink#/v1?lang=en-US&t1=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1&t0=T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb&type=swap" target="_blank" rel="noopener noreferrer" className="w-full py-4 rounded-xl font-extrabold text-base mb-4 flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg,#f5a623,#e8950f)', color: '#000', textDecoration:'none', fontFamily:'inherit' }}>
+                🛒 Get LDA on SunSwap
+              </a>
+            </>
           ) : runState === 'idle' || runState === 'error' || runState === 'done' ? (
             <button onClick={runQuery} disabled={!input.trim()} className="w-full py-4 rounded-xl font-extrabold text-base mb-4 disabled:opacity-40" style={{ background: runState === 'done' ? 'rgba(20,184,166,0.15)' : 'linear-gradient(135deg,#14b8a6,#0d9488)', color: runState === 'done' ? '#14b8a6' : '#000', border: runState === 'done' ? '1px solid rgba(20,184,166,0.3)' : 'none', fontFamily:'inherit' }}>
               {runState === 'done' ? '🔄 Run New Analysis' : `⚡ Run ${tool.shortName} Analysis`}

@@ -222,13 +222,14 @@ export default function Home() {
             <Link href="/tools"
               className="px-8 py-3.5 rounded-xl font-extrabold text-base no-underline transition-all"
               style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 4px 20px rgba(245,166,35,0.25)' }}>
-              ⚡ Get Started
+              ⚡ Launch App
             </Link>
-            <Link href="/tools"
+            <a href="https://sunswap.com/?utm_source=tronlink#/v1?lang=en-US&t1=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1&t0=T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb&type=swap"
+              target="_blank" rel="noopener noreferrer"
               className="px-8 py-3.5 rounded-xl font-bold text-base no-underline transition-all"
               style={{ border: '1px solid #14b8a6', color: '#14b8a6', background: 'transparent' }}>
-              Explore AI Tools →
-            </Link>
+              🛒 Get LDA
+            </a>
           </div>
 
           <div className="mt-16 flex flex-col items-center gap-2" style={{ color: '#4a5a6a', animation: 'float 3s ease-in-out infinite' }}>
