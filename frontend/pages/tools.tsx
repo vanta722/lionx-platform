@@ -99,7 +99,17 @@ export default function Tools() {
       if (!tw) throw new Error('TronLink not found — open in TronLink browser')
       if (!tw.defaultAddress?.base58) throw new Error('Wallet not connected — unlock TronLink first')
 
-      // Step 1: Send LDA transfer
+      // Step 1: Sign nonce FIRST — proves ownership before any LDA is spent
+      // If user cancels here, no money lost
+      const nonce = `lionx:${tool.id}:${Date.now()}`
+      let sig: string
+      try {
+        sig = await tw.trx.signMessageV2(nonce)
+      } catch (e: any) {
+        throw new Error('Signature cancelled — please approve the signature in TronLink to continue. No LDA was charged.')
+      }
+
+      // Step 2: Send LDA transfer (only after signature confirmed)
       setRunState('sending')
       let lda: any
       try {
@@ -118,18 +128,9 @@ export default function Tools() {
       }
       if (!sendResult) throw new Error('Transfer rejected — please approve in TronLink')
 
-      // Step 2: Wait for block confirmation
+      // Step 3: Wait for block confirmation
       setRunState('running')
       await new Promise(r => setTimeout(r, 10000))
-
-      // Step 3: Sign a nonce to prove wallet ownership (MED-1 fix)
-      const nonce = `lionx:${tool.id}:${Date.now()}`
-      let sig: string
-      try {
-        sig = await tw.trx.signMessageV2(nonce)
-      } catch (e: any) {
-        throw new Error('Signature rejected — please approve in TronLink to verify wallet ownership')
-      }
 
       // Step 4: API verifies payment + signature and runs AI analysis
       const controller = new AbortController()
