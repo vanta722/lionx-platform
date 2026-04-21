@@ -4,12 +4,34 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 async function getWalletData(address: string) {
   try {
     const [acctRes, txRes] = await Promise.all([
-      fetch(`https://apilist.tronscanapi.com/api/accountv2?address=${address}`),
+      fetch(`https://apilist.tronscanapi.com/api/account?address=${address}`),
       fetch(`https://apilist.tronscanapi.com/api/transaction?address=${address}&limit=20&start=0`)
     ])
     const acct = await acctRes.json()
     const txs  = await txRes.json()
-    return { acct, txs }
+
+    const trxBalance    = (acct?.balance || 0) / 1e6
+    const totalTxns     = acct?.totalTransactionCount || 0
+    const created       = acct?.date_created ? new Date(acct.date_created * 1000).toISOString().split('T')[0] : 'Unknown'
+    const agedays       = acct?.date_created ? Math.floor((Date.now()/1000 - acct.date_created) / 86400) : 0
+    const bw            = acct?.bandwidth || {}
+    const freeBW        = bw.freeNetRemaining ?? bw.freeNetLimit ?? 0
+    const trc20s        = (acct?.trc20token_balances || []).slice(0, 5).map((t: any) => ({
+      symbol:  t.tokenAbbr || t.symbol,
+      balance: (Number(t.balance) / Math.pow(10, t.tokenDecimal || 6)).toFixed(2),
+    }))
+
+    const txList: any[] = txs?.data || []
+    const sends         = txList.filter((t: any) => t.ownerAddress === address).length
+    const receives      = txList.length - sends
+    const contractCalls = txList.filter((t: any) => t.contractType === 31).length
+
+    return {
+      address, trxBalance, totalTxns, created, agedays,
+      freeBandwidth: freeBW,
+      trc20Holdings: trc20s,
+      recentActivity: { sends, receives, contractCalls, total: txList.length },
+    }
   } catch { return null }
 }
 
@@ -19,9 +41,24 @@ async function getContractData(address: string) {
       fetch(`https://apilist.tronscanapi.com/api/token_trc20?contract=${address}`),
       fetch(`https://apilist.tronscanapi.com/api/contract?contract=${address}`)
     ])
-    const token    = await tokenRes.json()
-    const contract = await contractRes.json()
-    return { token, contract }
+    const tokenData    = await tokenRes.json()
+    const contractData = await contractRes.json()
+    const t = tokenData?.trc20_tokens?.[0] || null
+    const c = contractData?.data?.[0] || contractData || null
+
+    return {
+      address,
+      verified:     !!(c?.verify_status || c?.isVerified),
+      contractName: c?.name || c?.contract_name || t?.name || 'Unknown',
+      creator:      c?.creator_address || c?.ownerAddress || 'Unknown',
+      created:      c?.date_created ? new Date(c.date_created * 1000).toISOString().split('T')[0] : 'Unknown',
+      txCount:      c?.call_num || c?.trxCount || 0,
+      trxBalance:   (c?.balance || 0) / 1e6,
+      hasToken:     !!t,
+      tokenSymbol:  t?.symbol || null,
+      tokenHolders: t?.holders_count || 0,
+      tokenSupply:  t ? (Number(t.totalTurnOver) / Math.pow(10, t.decimals || 6)).toFixed(0) : null,
+    }
   } catch { return null }
 }
 
@@ -78,94 +115,121 @@ async function getTokenData(nameOrAddress: string) {
   } catch { return null }
 }
 
-const SYSTEM_PROMPT = `You are an expert Tron blockchain analyst and AI assistant for the Lion X platform.
-You analyze real on-chain data and provide clear, actionable intelligence for crypto users.
-Always respond with structured, accurate insights. Be direct and avoid filler.
-Return ONLY valid JSON — no markdown, no explanation outside the JSON.`
+const SYSTEM_PROMPT = `You are an expert Tron blockchain analyst for the Lion X platform.
+You ONLY use data provided to you — never invent or estimate values not in the data.
+Be direct, specific, and opinionated. Reference exact numbers. No filler, no hedging.
+Return ONLY valid JSON — no markdown, no text outside the JSON object.`
 
 const TOOL_PROMPTS: Record<string, (input: string, data: any) => string> = {
   WALLET_ANALYZER: (addr, data) => `
-Analyze this Tron wallet address: ${addr}
+Analyze this Tron wallet. Use ONLY the numbers provided — reference them directly in your output.
 
-On-chain data retrieved:
-${JSON.stringify(data, null, 2)}
+Wallet: ${addr}
+Data: ${JSON.stringify(data, null, 2)}
 
-Return a JSON object with exactly these fields:
+Scoring guide:
+- Score 80-100: account age >2 years AND >500 txns AND >10 TRX balance
+- Score 60-79: account age >1 year OR >100 txns, moderate activity
+- Score 40-59: new account (<6 months) or very low activity
+- Score 0-39: brand new, empty, or suspicious patterns
+
+Wallet type guide:
+- Whale: >10,000 TRX OR >50,000 USD in tokens
+- Active Trader: >1000 total txns and recent sends/receives balanced
+- DeFi User: high contractCalls count in recentActivity
+- Long-term Holder: old account (>2 years), low txn frequency
+- New Wallet: age <90 days
+- Bot/Automated: very high txn count with low TRX balance
+
+Return ONLY this JSON:
 {
-  "score": <number 0-100, higher = safer/more reputable>,
-  "scoreLabel": "RISK SCORE",
-  "verdict": "<emoji + short verdict e.g. '⚠ Moderate Risk' or '✓ Low Risk' or '🔴 High Risk'>",
-  "type": "<wallet classification: Active Trader | Long-term Holder | DeFi User | Bot/Automated | New Wallet | Whale>",
+  "score": <0-100 based on scoring guide above>,
+  "scoreLabel": "TRUST SCORE",
+  "verdict": "<emoji + verdict referencing actual age/txns e.g. '✅ 847-Day Veteran' or '⚠ 12-Day Old Wallet' or '🔴 Suspicious Pattern'>",
+  "type": "<wallet type from guide>",
   "metrics": [
-    {"label": "TRX Balance",   "value": "<value>", "color": "#14b8a6"},
-    {"label": "Token Count",   "value": "<value>", "color": "#f5a623"},
-    {"label": "Total Txns",    "value": "<value>", "color": "#14b8a6"},
-    {"label": "Wallet Age",    "value": "<value>", "color": "#22c55e"},
-    {"label": "Avg Tx Size",   "value": "<value>", "color": "#f5a623"},
-    {"label": "Rug Exposure",  "value": "<value>", "color": "#ef4444"}
+    {"label": "TRX Balance",  "value": "<exact trxBalance>",         "color": "#14b8a6"},
+    {"label": "Total Txns",   "value": "<exact totalTxns>",          "color": "#f5a623"},
+    {"label": "Wallet Age",   "value": "<exact agedays> days",       "color": "#22c55e"},
+    {"label": "Tokens Held",  "value": "<count of trc20Holdings>",   "color": "#14b8a6"},
+    {"label": "Recent Sends", "value": "<recentActivity.sends>",      "color": "#f5a623"},
+    {"label": "Contract Calls","value": "<recentActivity.contractCalls>", "color": "#a78bfa"}
   ],
-  "analysis": "<3-4 sentences with key terms wrapped in <span style=\\"color:#dde8f0;font-weight:600\\">text</span>>",
+  "analysis": "<3-4 sentences. Must include: exact TRX balance, exact total transactions, exact wallet age in days, and token holdings. Be direct and opinionated.>",
   "flags": [
-    {"level": "ok|warn|risk", "text": "<finding>"}
+    {"level": "ok|warn|risk", "text": "<specific finding with actual numbers>"}
   ]
 }
 Return only the JSON.`,
 
   CONTRACT_AUDITOR: (addr, data) => `
-Audit this TRC-20 smart contract: ${addr}
+Audit this Tron smart contract using ONLY the data provided. Reference exact numbers.
 
-Contract and token data:
-${JSON.stringify(data, null, 2)}
+Contract: ${addr}
+Data: ${JSON.stringify(data, null, 2)}
 
-Return a JSON object with exactly these fields:
+Scoring:
+- Score 80+: verified=true AND txCount>1000 AND age>1 year
+- Score 60-79: verified OR moderate activity
+- Score 40-59: unverified but some activity
+- Score 0-39: unverified, new, or no activity
+
+Return ONLY this JSON:
 {
-  "score": <number 0-100, higher = safer>,
+  "score": <0-100 per scoring guide>,
   "scoreLabel": "SAFETY SCORE",
-  "verdict": "<emoji + verdict e.g. '✓ Relatively Safe' or '⚠ Proceed with Caution' or '🔴 High Risk'>",
-  "type": "<contract type: TRC-20 Token | Meme Token | DeFi Protocol | NFT Contract | Unknown>",
+  "verdict": "<emoji + specific verdict referencing verified status and tx count>",
+  "type": "<TRC-20 Token | DeFi Protocol | NFT Contract | Unknown Contract>",
   "metrics": [
-    {"label": "Honeypot",    "value": "None | Detected",        "color": "<#22c55e or #ef4444>"},
-    {"label": "Mint Func",   "value": "Present | None",          "color": "<#f5a623 or #22c55e>"},
-    {"label": "Ownership",   "value": "Renounced | Active",      "color": "<#22c55e or #f5a623>"},
-    {"label": "Verified",    "value": "Yes | No",                "color": "<#22c55e or #ef4444>"},
-    {"label": "Buy Tax",     "value": "<value>%",                "color": "#14b8a6"},
-    {"label": "Sell Tax",    "value": "<value>%",                "color": "#14b8a6"}
+    {"label": "Verified",     "value": "<Yes or No>",              "color": "<#22c55e if yes, #ef4444 if no>"},
+    {"label": "Contract Name","value": "<contractName>",           "color": "#14b8a6"},
+    {"label": "Tx Count",     "value": "<exact txCount>",          "color": "#f5a623"},
+    {"label": "TRX Balance",  "value": "<exact trxBalance>",       "color": "#14b8a6"},
+    {"label": "Has Token",    "value": "<Yes (SYMBOL) or No>",     "color": "#a78bfa"},
+    {"label": "Token Holders","value": "<tokenHolders or N/A>",   "color": "#22c55e"}
   ],
-  "analysis": "<3-4 sentence audit summary with key terms highlighted>",
+  "analysis": "<3-4 sentences with exact data: verification status, creator address, transaction count, contract age. Be specific and direct.>",
   "flags": [
-    {"level": "ok|warn|risk", "text": "<finding>"}
+    {"level": "ok|warn|risk", "text": "<specific finding with actual data>"}
   ]
 }
 Return only the JSON.`,
 
   MARKET_INTEL: (token, data) => `
-You are a Tron blockchain analyst. Analyze this token using ONLY the data provided. Do NOT invent numbers.
-If a metric has no data, set its value to "N/A". Never fabricate price, volume, or liquidity values.
+Analyze this Tron token using ONLY the data provided. Reference exact numbers. No invented metrics.
 
-Token queried: ${token}
-On-chain data:
-${JSON.stringify(data, null, 2)}
+Token: ${token}
+Data: ${JSON.stringify(data, null, 2)}
 
-Base your score on what IS known: holder count, total transfers, token age, whether it has exchange listing.
-If isListedWithPrice is false, price/liquidity/volume are unknown — say "Not Listed" or "N/A".
+IMPORTANT CALCULATIONS to include in analysis:
+- Transfer velocity = totalTransfers ÷ days since issued (calculate this and state it)
+- If holders < 500 after >2 years: call it out as slow community growth
+- If transfers24h = 0: state it directly as zero activity today
+- If isListedWithPrice = false: say "Not exchange listed" — do NOT say N/A for price, say "Not Listed"
 
-Return a JSON object with exactly these fields:
+Scoring:
+- 70-100: >1000 holders OR exchange listed with volume
+- 50-69: 200-1000 holders, consistent transfer history
+- 30-49: <200 holders, low daily velocity
+- 0-29: inactive (<5 transfers/day average), near-zero holders
+
+Return ONLY this JSON:
 {
-  "score": <0-100 based on holder activity, transfer history, token age>,
-  "scoreLabel": "COMMUNITY SCORE",
-  "verdict": "<emoji + honest verdict e.g. '🔥 Active Community' or '⚠ Low On-Chain Activity' or '📊 Established Token'>",
-  "type": "<Exchange Listed | Community Token | New Token | Inactive Token>",
+  "score": <0-100 per scoring guide>,
+  "scoreLabel": "MOMENTUM SCORE",
+  "verdict": "<emoji + specific verdict e.g. '📉 282 Holders, 7.5 Txns/Day Avg' or '🔥 Exchange Listed, Active Volume'>",
+  "type": "<Exchange Listed | Community Token | Dormant Token | Early Stage>",
   "metrics": [
-    {"label": "Holders",     "value": "<holders or N/A>",          "color": "#14b8a6"},
-    {"label": "Transfers",   "value": "<totalTransfers or N/A>",    "color": "#f5a623"},
-    {"label": "24h Txns",    "value": "<transfers24h or N/A>",      "color": "#14b8a6"},
-    {"label": "Price",       "value": "<price_usd or Not Listed>",  "color": "#f5a623"},
-    {"label": "Market Cap",  "value": "<marketCapUsd or N/A>",      "color": "#14b8a6"},
-    {"label": "Token Age",   "value": "<years/months since issued>", "color": "#22c55e"}
+    {"label": "Holders",      "value": "<exact holders>",            "color": "#14b8a6"},
+    {"label": "Total Transfers","value": "<exact totalTransfers>",   "color": "#f5a623"},
+    {"label": "24h Transfers", "value": "<exact transfers24h>",       "color": "#14b8a6"},
+    {"label": "Tx Velocity",   "value": "<calculated txns/day avg>",  "color": "#a78bfa"},
+    {"label": "Price",         "value": "<price_usd if listed, else 'Not Listed'>", "color": "#f5a623"},
+    {"label": "Token Age",     "value": "<exact years/months from issued date>", "color": "#22c55e"}
   ],
-  "analysis": "<3-4 sentences of honest analysis. Reference only confirmed data. State clearly if price/liquidity data is unavailable.>",
+  "analysis": "<3-4 sharp sentences. Must include: exact holder count, total transfers, calculated daily velocity, token age, and honest assessment of community growth rate.>",
   "flags": [
-    {"level": "ok|warn|risk", "text": "<specific factual observation from the data>"}
+    {"level": "ok|warn|risk", "text": "<specific factual signal with real numbers>"}
   ]
 }
 Return only the JSON.`,
