@@ -121,6 +121,7 @@ export default function ActivityTicker() {
         style={{
           display:    'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           height:     '100%',
           paddingLeft: 80,
           gap: 0,
