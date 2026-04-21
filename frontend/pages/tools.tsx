@@ -257,11 +257,6 @@ export default function Tools() {
                 <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <span className="text-xs font-bold" style={{ color: '#7a8a9a' }}>⚡ Output</span>
                   <div className="flex items-center gap-2">
-                    {runState === 'done' && result && !result.error && (
-                      <button onClick={shareReport} className="text-xs font-bold px-3 py-1 rounded-lg" style={{ background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(20,184,166,0.08)', color: copied ? '#22c55e' : '#14b8a6', border: `1px solid ${copied ? 'rgba(34,197,94,0.2)' : 'rgba(20,184,166,0.2)'}`, cursor:'pointer', fontFamily:'inherit' }}>
-                        {copied ? '✅ Copied!' : '🔗 Share'}
-                      </button>
-                    )}
                     <span className="text-xs font-bold px-2.5 py-1 rounded" style={{ background: runState==='done'?'rgba(34,197,94,0.1)':runState==='running'||runState==='sending'?'rgba(245,166,35,0.1)':'rgba(20,184,166,0.1)', color: runState==='done'?'#22c55e':runState==='running'||runState==='sending'?'#f5a623':'#14b8a6', border:`1px solid ${runState==='done'?'rgba(34,197,94,0.2)':'rgba(20,184,166,0.2)'}` }}>
                       {runState==='done'?'Complete':runState==='running'?'Analyzing...':runState==='sending'?'Sending LDA...':'Ready'}
                     </span>
@@ -372,14 +367,7 @@ export default function Tools() {
             <div>
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#22c55e' }}>✅ Analysis Complete</span>
-                <div className="flex gap-2">
-                  <button onClick={shareToX} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: tweetCopied?'rgba(29,161,242,0.15)':'rgba(29,161,242,0.08)', color: '#1da1f2', border:'1px solid rgba(29,161,242,0.2)', cursor:'pointer', fontFamily:'inherit' }}>
-                    {tweetCopied ? '✅ Shared!' : '𝕏 Share'}
-                  </button>
-                  <button onClick={shareReport} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: copied?'rgba(34,197,94,0.1)':'rgba(20,184,166,0.08)', color: copied?'#22c55e':'#14b8a6', border:`1px solid ${copied?'rgba(34,197,94,0.2)':'rgba(20,184,166,0.2)'}`, cursor:'pointer', fontFamily:'inherit' }}>
-                    {copied ? '✅ Copied!' : '🔗 Copy Link'}
-                  </button>
-                </div>
+
               </div>
               <ResultDisplay result={result}/>
             </div>
