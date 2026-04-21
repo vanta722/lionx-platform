@@ -2,23 +2,31 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const TREASURY  = 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
 const LDA_TOKEN = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
+const KV_KEY    = 'lionx:treasury:balance'
+const CACHE_TTL = 60 // seconds
 
-// In-memory cache — survives within the same serverless instance
-// Prevents flaky Tronscan responses from showing 0 to the user
-let cachedBalance = 125.052703  // seed with known value so first render is never 0
-let cacheTime     = 0
-const CACHE_TTL   = 60_000     // 60s — refresh at most once per minute
+async function kvGet(url: string, token: string, key: string): Promise<number | null> {
+  try {
+    const r = await fetch(`${url}/get/${key}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3000),
+    })
+    const d = await r.json()
+    return d?.result ? Number(d.result) : null
+  } catch { return null }
+}
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader('Cache-Control', 'no-store')
+async function kvSet(url: string, token: string, key: string, value: number) {
+  try {
+    await fetch(`${url}/set/${key}/${value}?ex=${CACHE_TTL}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3000),
+    })
+  } catch { /* best-effort */ }
+}
 
-  const now = Date.now()
-
-  // Return cached value if fresh enough
-  if (cacheTime && now - cacheTime < CACHE_TTL) {
-    return res.status(200).json({ balance: cachedBalance, cached: true })
-  }
-
+async function fetchFromTronscan(): Promise<number | null> {
   try {
     const r = await fetch(
       `https://apilist.tronscanapi.com/api/account?address=${TREASURY}`,
@@ -27,21 +35,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         signal: AbortSignal.timeout(6000),
       }
     )
-    if (!r.ok) throw new Error(`Tronscan ${r.status}`)
+    if (!r.ok) return null
     const data   = await r.json()
     const tokens: any[] = data?.trc20token_balances || []
     const entry  = tokens.find(t => t.tokenAbbr === 'LDA' || t.tokenId === LDA_TOKEN)
-    const balance = entry ? Number(entry.balance) / 1e6 : cachedBalance
+    return entry ? Number(entry.balance) / 1e6 : null
+  } catch { return null }
+}
 
-    // Only update cache if we got a real value
-    if (entry) {
-      cachedBalance = balance
-      cacheTime     = now
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader('Cache-Control', 'no-store')
+
+  const kvUrl   = process.env.KV_REST_API_URL
+  const kvToken = process.env.KV_REST_API_TOKEN
+
+  // 1. Try KV cache first (shared across all Vercel instances)
+  if (kvUrl && kvToken) {
+    const cached = await kvGet(kvUrl, kvToken, KV_KEY)
+    if (cached !== null) {
+      return res.status(200).json({ balance: cached, cached: true })
     }
-
-    return res.status(200).json({ balance })
-  } catch {
-    // Tronscan flaked — return last known good value instead of 0
-    return res.status(200).json({ balance: cachedBalance, cached: true, stale: true })
   }
+
+  // 2. Cache miss — fetch live from Tronscan
+  const live = await fetchFromTronscan()
+
+  if (live !== null) {
+    // Store in KV for next 60s
+    if (kvUrl && kvToken) await kvSet(kvUrl, kvToken, KV_KEY, live)
+    return res.status(200).json({ balance: live })
+  }
+
+  // 3. Tronscan failed and no cache — return known floor value
+  return res.status(200).json({ balance: 125.052703, stale: true })
 }
