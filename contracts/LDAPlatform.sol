@@ -83,6 +83,14 @@ contract LDAPlatform {
     // ── Pause ──
     bool public paused;
 
+    // ── FIX-3: Two-step ownership ──
+    address public pendingOwner;
+
+    // ── FIX-8: Treasury timelock ──
+    address public pendingTreasury;
+    uint256 public treasuryChangeAfter; // timestamp after which pendingTreasury can be applied
+    uint256 public constant TREASURY_TIMELOCK = 48 hours;
+
     // ── Events ──
     event QueryExecuted(
         address indexed user,
@@ -96,6 +104,12 @@ contract LDAPlatform {
     event ToolUpdated(bytes32 indexed toolId, uint256 newCost, bool active);
     event SubscriptionPurchased(address indexed user, uint256 expiresAt);
     event BurnSplitUpdated(uint256 burnPct, uint256 treasuryPct);
+    // FIX-3 + FIX-9: ownership events
+    event OwnershipTransferProposed(address indexed current, address indexed proposed);
+    event OwnershipTransferred(address indexed previous, address indexed newOwner);
+    // FIX-8: treasury timelock events
+    event TreasuryChangeProposed(address indexed proposed, uint256 effectiveAfter);
+    event TreasuryChanged(address indexed previous, address indexed newTreasury);
 
     modifier onlyOwner()    { require(msg.sender == owner, "Not owner"); _; }
     modifier whenNotPaused(){ require(!paused, "Platform paused"); _; }
@@ -129,9 +143,9 @@ contract LDAPlatform {
      * Emits QueryExecuted → AI backend serves result.
      */
     function executeQuery(bytes32 toolId, bytes32 queryRef) external whenNotPaused {
+        // ── Checks ──────────────────────────────────────────────────────
         require(queryRef != bytes32(0), "Invalid queryRef");
         require(!usedRefs[queryRef],    "QueryRef already used");
-        usedRefs[queryRef] = true;
 
         Tool storage tool = tools[toolId];
         require(tool.active, "Tool not active");
@@ -159,20 +173,19 @@ contract LDAPlatform {
 
         uint256 queryNonce = nonce[msg.sender]++;
 
-        // Pull tokens from user
+        // ── Effects (FIX-2: state updates BEFORE external calls — CEI pattern) ──
+        usedRefs[queryRef]       = true;
+        queriesRun[msg.sender]   += 1;
+        totalSpentBy[msg.sender] += cost;
+        tool.totalQueries        += 1;
+
+        // ── Interactions (external calls last) ───────────────────────────
         require(
             ldaToken.transferFrom(msg.sender, address(this), cost),
             "Platform: transfer failed - approve this contract first"
         );
-
-        // Split: burn portion → burnWallet, treasury portion → treasury
         require(ldaToken.transfer(burnWallet, burnAmount),     "Platform: burn transfer failed");
         require(ldaToken.transfer(treasury,   treasuryAmount), "Platform: treasury transfer failed");
-
-        // Track usage
-        queriesRun[msg.sender]   += 1;
-        totalSpentBy[msg.sender] += cost;
-        tool.totalQueries        += 1;
 
         emit QueryExecuted(msg.sender, toolId, cost, burnAmount, treasuryAmount, queryNonce);
     }
@@ -276,13 +289,28 @@ contract LDAPlatform {
         emit ToolUpdated(toolId, newCost, active_);
     }
 
-    function setTreasury(address newTreasury) external onlyOwner {
+    // FIX-5: burnWallet and treasury must never equal each other
+    // FIX-8: treasury change requires 48-hour timelock
+    function proposeTreasury(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Zero address");
-        treasury = newTreasury;
+        require(newTreasury != burnWallet,  "Cannot equal burn wallet");
+        pendingTreasury    = newTreasury;
+        treasuryChangeAfter = block.timestamp + TREASURY_TIMELOCK;
+        emit TreasuryChangeProposed(newTreasury, treasuryChangeAfter);
+    }
+
+    function applyTreasury() external onlyOwner {
+        require(pendingTreasury != address(0), "No pending treasury");
+        require(block.timestamp >= treasuryChangeAfter, "Timelock not elapsed");
+        address previous = treasury;
+        treasury         = pendingTreasury;
+        pendingTreasury  = address(0);
+        emit TreasuryChanged(previous, treasury);
     }
 
     function setBurnWallet(address newBurnWallet) external onlyOwner {
         require(newBurnWallet != address(0), "Zero address");
+        require(newBurnWallet != treasury,   "Cannot equal treasury");  // FIX-5
         burnWallet = newBurnWallet;
     }
 
@@ -313,8 +341,17 @@ contract LDAPlatform {
     function pause()   external onlyOwner { paused = true; }
     function unpause() external onlyOwner { paused = false; }
 
-    function transferOwnership(address newOwner) external onlyOwner {
+    // FIX-3 + FIX-9: two-step ownership transfer with events
+    function proposeOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Zero address");
-        owner = newOwner;
+        pendingOwner = newOwner;
+        emit OwnershipTransferProposed(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not pending owner");
+        emit OwnershipTransferred(owner, pendingOwner);
+        owner        = pendingOwner;
+        pendingOwner = address(0);
     }
 }

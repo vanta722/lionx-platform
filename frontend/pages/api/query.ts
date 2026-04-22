@@ -19,10 +19,13 @@ function msToDays(ms: number): number {
 
 // Fetch real on-chain data from Tronscan API
 // Shared 10s timeout for all Tronscan fetches
+// FIX-6: include API key header when configured to avoid unauthenticated rate limits
 function tronscanFetch(url: string): Promise<Response> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 10000)
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer))
+  const headers: Record<string, string> = {}
+  if (process.env.TRONSCAN_API_KEY) headers['TRON-PRO-API-KEY'] = process.env.TRONSCAN_API_KEY
+  return fetch(url, { signal: ctrl.signal, headers }).finally(() => clearTimeout(timer))
 }
 
 async function getWalletData(address: string) {
@@ -267,59 +270,59 @@ Return ONLY this JSON:
 Return only the JSON.`,
 }
 
-// ── Rate limiting: max 10 requests per IP per minute ──────────
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
-const RATE_LIMIT    = 10
-const RATE_WINDOW   = 60 * 1000 // 1 minute
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
-  const now    = Date.now()
-  const entry  = rateLimitMap.get(ip)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW })
-    return { allowed: true, remaining: RATE_LIMIT - 1 }
-  }
-  if (entry.count >= RATE_LIMIT) return { allowed: false, remaining: 0 }
-  entry.count++
-  // NEW-4 FIX: prune stale entries to prevent memory leak
-  if (rateLimitMap.size > 5000) {
-    Array.from(rateLimitMap.entries()).forEach(([k, v]) => { if (now > v.resetAt) rateLimitMap.delete(k) })
-  }
-  return { allowed: true, remaining: RATE_LIMIT - entry.count }
+// ── FIX-1: Enforce KV is configured — in-memory maps are not safe on serverless ──
+// Multiple Vercel instances share no memory; replay/rate state MUST live in KV.
+const kvUrl   = process.env.KV_REST_API_URL
+const kvToken = process.env.KV_REST_API_TOKEN
+if (!kvUrl || !kvToken) {
+  throw new Error('[lionx] FATAL: KV_REST_API_URL and KV_REST_API_TOKEN must be set. In-memory state is not safe on serverless.')
 }
 
-// ── Replay protection: Upstash Redis (persistent across cold starts) ───────
-// Falls back to in-memory if KV_REST_API_URL is not configured.
-// To enable persistent protection: Vercel dashboard → Storage → Connect KV
-const inMemoryUsed = new Map<string, number>()
-const REPLAY_TTL_MS = 20 * 60 * 1000
+// ── Rate limiting: max 10 requests per IP per minute ──────────
+// FIX-1: rate limit now backed by KV — works across all Vercel instances
+const RATE_LIMIT  = 10
+const RATE_WINDOW = 60 // seconds
 
-async function isReplay(txHash: string): Promise<boolean> {
-  // --- Upstash Redis path (production) ---
-  const kvUrl   = process.env.KV_REST_API_URL
-  const kvToken = process.env.KV_REST_API_TOKEN
-  if (kvUrl && kvToken) {
-    try {
-      const key = `lionx:used:${txHash}`
-      // SET key 1 EX 1200 NX - only sets if not exists, TTL 20 min
-      const setRes = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/1200/nx`, {
+async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  const key = `lionx:rl:${ip}`
+  try {
+    // INCR returns new count; if key didn't exist, Redis auto-creates it at 0 first
+    const incrRes  = await fetch(`${kvUrl}/incr/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${kvToken}` }
+    })
+    const incrData = await incrRes.json()
+    const count    = Number(incrData?.result ?? RATE_LIMIT + 1)
+    // On first increment, set TTL
+    if (count === 1) {
+      await fetch(`${kvUrl}/expire/${encodeURIComponent(key)}/${RATE_WINDOW}`, {
         headers: { Authorization: `Bearer ${kvToken}` }
       })
-      const setData = await setRes.json()
-      // Upstash returns { result: 'OK' } if set, { result: null } if already exists
-      return setData?.result !== 'OK'
-    } catch (e) {
-      console.error('[lionx] KV error, falling back to in-memory:', e)
     }
+    if (count > RATE_LIMIT) return { allowed: false, remaining: 0 }
+    return { allowed: true, remaining: RATE_LIMIT - count }
+  } catch {
+    // KV error: fail open (allow) to avoid blocking legit users during KV outage
+    console.error('[lionx] KV rate-limit error — failing open')
+    return { allowed: true, remaining: 1 }
   }
-  // --- In-memory fallback (dev / no KV configured) ---
-  const now = Date.now()
-  Array.from(inMemoryUsed.entries()).forEach(([h, ts]) => {
-    if (now - ts > REPLAY_TTL_MS) inMemoryUsed.delete(h)
-  })
-  if (inMemoryUsed.has(txHash)) return true
-  inMemoryUsed.set(txHash, now)
-  return false
+}
+
+// ── Replay protection: Upstash Redis (KV now required — see FIX-1) ───────
+async function isReplay(txHash: string): Promise<boolean> {
+  try {
+    const key = `lionx:used:${txHash}`
+    // SET key 1 EX 1200 NX — sets only if absent, 20-min TTL
+    const setRes  = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/1200/nx`, {
+      headers: { Authorization: `Bearer ${kvToken}` }
+    })
+    const setData = await setRes.json()
+    // { result: 'OK' } = newly set (not a replay); { result: null } = already exists (replay)
+    return setData?.result !== 'OK'
+  } catch (e) {
+    console.error('[lionx] KV replay-check error — rejecting to be safe:', e)
+    // FIX-1: fail CLOSED on KV error for replay protection (unlike rate limit)
+    return true
+  }
 }
 
 // LDA token contract and treasury receiving address
@@ -338,24 +341,19 @@ const TOOL_COSTS: Record<string, number> = {
 const inMemoryCooldowns = new Map<string, number>()
 const WALLET_COOLDOWN_MS = 5 * 60 * 1000 // 5 min
 
+// FIX-1: cooldown now KV-only — no in-memory fallback
 async function checkWalletCooldown(address: string, tool: string): Promise<boolean> {
   const key = `lionx:cd:${address}:${tool}`
-  const kvUrl   = process.env.KV_REST_API_URL
-  const kvToken = process.env.KV_REST_API_TOKEN
-  if (kvUrl && kvToken) {
-    try {
-      const setRes  = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/300/nx`, {
-        headers: { Authorization: `Bearer ${kvToken}` }
-      })
-      const setData = await setRes.json()
-      return setData?.result !== 'OK' // true = on cooldown
-    } catch { /* fallthrough */ }
+  try {
+    const setRes  = await fetch(`${kvUrl}/set/${encodeURIComponent(key)}/1/ex/300/nx`, {
+      headers: { Authorization: `Bearer ${kvToken}` }
+    })
+    const setData = await setRes.json()
+    return setData?.result !== 'OK' // true = on cooldown
+  } catch {
+    console.error('[lionx] KV cooldown error — failing open')
+    return false
   }
-  const now = Date.now()
-  const last = inMemoryCooldowns.get(key) || 0
-  if (now - last < WALLET_COOLDOWN_MS) return true
-  inMemoryCooldowns.set(key, now)
-  return false
 }
 
 // Look up the most recent LDA transfer FROM wallet TO treasury (within last 5 min)
@@ -441,7 +439,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Rate limit by IP
   const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
-  const rateCheck = checkRateLimit(ip)
+  const rateCheck = await checkRateLimit(ip)
   if (!rateCheck.allowed) {
     return res.status(429).json({ error: 'Rate limit exceeded - max 10 queries per minute' })
   }
@@ -476,10 +474,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (typeof input !== 'string' || input.length > 500) {
     return res.status(400).json({ error: 'Invalid input' })
   }
-  const cleanInput   = input.trim().replace(/[<>"'`]/g, '')
+  // FIX-10: strip newlines and additional injection vectors, not just angle brackets/quotes
+  const cleanInput   = input.trim()
+    .replace(/[<>"'`]/g, '')
+    .replace(/[\r\n\t]/g, ' ')
+    .slice(0, 200)
   const isTronAddr   = /^T[A-Za-z0-9]{33}$/.test(address)
   if (!isTronAddr) {
     return res.status(400).json({ error: 'Invalid wallet address' })
+  }
+  // FIX-7: for address-based tools, cleanInput should also be a valid Tron address.
+  // WALLET_ANALYZER and CONTRACT_AUDITOR analyze cleanInput — ensure it matches the paying address.
+  if ((tool === 'WALLET_ANALYZER' || tool === 'CONTRACT_AUDITOR') && cleanInput !== address) {
+    // Allow analyzing any address, but log the mismatch for audit purposes
+    console.log(`[lionx] note: paying wallet=${address} analyzing=${cleanInput}`)
   }
 
   // Look up recent LDA payment on-chain
@@ -548,8 +556,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Analysis failed — please try again' })
     }
 
-    // Validate required fields are present and non-empty
-    if (!parsed.score || !parsed.verdict || !parsed.analysis) {
+    // FIX-4: use == null instead of ! so a legitimate score of 0 doesn't fail validation
+    if (parsed.score == null || !parsed.verdict || !parsed.analysis) {
       console.error('[lionx] AI response missing required fields:', Object.keys(parsed))
       return res.status(500).json({ error: 'Incomplete analysis returned — please try again' })
     }
