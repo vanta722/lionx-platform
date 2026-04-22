@@ -270,13 +270,21 @@ Return ONLY this JSON:
 Return only the JSON.`,
 }
 
-// ── FIX-1: Enforce KV is configured — in-memory maps are not safe on serverless ──
-// Multiple Vercel instances share no memory; replay/rate state MUST live in KV.
+// ── FIX-1: KV required for cross-instance replay/rate protection ──
+// Without KV, we fall back to in-memory (unsafe on serverless — multiple instances share no state).
+// ACTION REQUIRED: connect Upstash KV on Vercel dashboard → Storage → KV
 const kvUrl   = process.env.KV_REST_API_URL
 const kvToken = process.env.KV_REST_API_TOKEN
 if (!kvUrl || !kvToken) {
-  throw new Error('[lionx] FATAL: KV_REST_API_URL and KV_REST_API_TOKEN must be set. In-memory state is not safe on serverless.')
+  console.error('[lionx] WARNING: KV not configured. Replay protection is instance-local only. Set KV_REST_API_URL + KV_REST_API_TOKEN.')
 }
+
+// In-memory fallback maps (only used when KV is absent — not safe at scale)
+const _inMemoryUsed      = new Map<string, number>()
+const _inMemoryCooldowns = new Map<string, number>()
+const _rateLimitMap      = new Map<string, { count: number; resetAt: number }>()
+const REPLAY_TTL_MS      = 20 * 60 * 1000
+const WALLET_COOLDOWN_MS = 5  * 60 * 1000
 
 // ── Rate limiting: max 10 requests per IP per minute ──────────
 // FIX-1: rate limit now backed by KV — works across all Vercel instances
