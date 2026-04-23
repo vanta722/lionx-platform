@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0e0e22"/>
+      <stop offset="100%" stop-color="#050508"/>
+    </radialGradient>
+    <radialGradient id="goldGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffe066"/>
+      <stop offset="60%" stop-color="#f5a623"/>
+      <stop offset="100%" stop-color="#c97d0a"/>
+    </radialGradient>
+    <radialGradient id="tealGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="circle">
+      <circle cx="200" cy="200" r="195"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="200" cy="200" r="200" fill="url(#bgGrad)"/>
+
+  <!-- Outer ring - gold -->
+  <circle cx="200" cy="200" r="192" fill="none" stroke="url(#goldGrad)" stroke-width="4" opacity="0.9"/>
+
+  <!-- Inner ring - teal -->
+  <circle cx="200" cy="200" r="180" fill="none" stroke="url(#tealGrad)" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- ── LION HEAD ── -->
+  <g clip-path="url(#circle)">
+
+    <!-- Mane outer glow -->
+    <ellipse cx="200" cy="210" rx="118" ry="112" fill="#f5a623" opacity="0.08" filter="url(#softglow)"/>
+
+    <!-- Mane layers (back) -->
+    <ellipse cx="200" cy="215" rx="108" ry="100" fill="#c97d0a" opacity="0.35"/>
+    <ellipse cx="200" cy="210" rx="98" ry="92" fill="#e8950f" opacity="0.45"/>
+
+    <!-- Mane spikes -->
+    <g fill="url(#goldGrad)" opacity="0.85">
+      <!-- Top spikes -->
+      <polygon points="200,88 190,120 210,120"/>
+      <polygon points="168,95 163,128 186,118"/>
+      <polygon points="232,95 237,128 214,118"/>
+      <polygon points="140,112 143,145 162,132"/>
+      <polygon points="260,112 257,145 238,132"/>
+      <!-- Side spikes -->
+      <polygon points="118,148 148,152 138,170"/>
+      <polygon points="282,148 252,152 262,170"/>
+      <polygon points="108,185 138,182 130,202"/>
+      <polygon points="292,185 262,182 270,202"/>
+      <polygon points="112,222 140,212 136,234"/>
+      <polygon points="288,222 260,212 264,234"/>
+      <!-- Lower spikes -->
+      <polygon points="132,258 156,242 155,264"/>
+      <polygon points="268,258 244,242 245,264"/>
+    </g>
+
+    <!-- Mane main circle -->
+    <circle cx="200" cy="205" r="88" fill="url(#goldGrad)" opacity="0.9"/>
+    <circle cx="200" cy="205" r="82" fill="#1a0e02" opacity="0.15"/>
+
+    <!-- Face base -->
+    <ellipse cx="200" cy="208" rx="68" ry="72" fill="#e8a020"/>
+    <ellipse cx="200" cy="206" rx="62" ry="66" fill="#f2b340"/>
+
+    <!-- Darker face shading top -->
+    <ellipse cx="200" cy="188" rx="48" ry="38" fill="#c98818" opacity="0.3"/>
+
+    <!-- Ears -->
+    <ellipse cx="162" cy="155" rx="18" ry="20" fill="#e8a020" transform="rotate(-12,162,155)"/>
+    <ellipse cx="238" cy="155" rx="18" ry="20" fill="#e8a020" transform="rotate(12,238,155)"/>
+    <ellipse cx="162" cy="155" rx="10" ry="12" fill="#c07010" opacity="0.6" transform="rotate(-12,162,155)"/>
+    <ellipse cx="238" cy="155" rx="10" ry="12" fill="#c07010" opacity="0.6" transform="rotate(12,238,155)"/>
+
+    <!-- Forehead marking -->
+    <path d="M185,170 Q200,162 215,170 Q210,178 200,176 Q190,178 185,170Z" fill="#c98818" opacity="0.5"/>
+
+    <!-- Eyes -->
+    <!-- Left eye -->
+    <ellipse cx="178" cy="192" rx="16" ry="13" fill="#1a1a2e"/>
+    <ellipse cx="178" cy="192" rx="13" ry="10" fill="#2d5016"/>
+    <ellipse cx="178" cy="192" rx="8" ry="9" fill="#1a3008"/>
+    <ellipse cx="178" cy="192" rx="5" ry="7" fill="#0a0a0a"/>
+    <ellipse cx="175" cy="189" rx="2.5" ry="2" fill="white" opacity="0.85"/>
+    <!-- Left eye shine -->
+    <ellipse cx="178" cy="192" rx="13.5" ry="10.5" fill="none" stroke="#4ade80" stroke-width="1" opacity="0.5"/>
+
+    <!-- Right eye -->
+    <ellipse cx="222" cy="192" rx="16" ry="13" fill="#1a1a2e"/>
+    <ellipse cx="222" cy="192" rx="13" ry="10" fill="#2d5016"/>
+    <ellipse cx="222" cy="192" rx="8" ry="9" fill="#1a3008"/>
+    <ellipse cx="222" cy="192" rx="5" ry="7" fill="#0a0a0a"/>
+    <ellipse cx="219" cy="189" rx="2.5" ry="2" fill="white" opacity="0.85"/>
+    <!-- Right eye shine -->
+    <ellipse cx="222" cy="192" rx="13.5" ry="10.5" fill="none" stroke="#4ade80" stroke-width="1" opacity="0.5"/>
+
+    <!-- Nose -->
+    <path d="M192,218 Q200,212 208,218 Q204,228 200,230 Q196,228 192,218Z" fill="#8b3a3a"/>
+    <path d="M195,218 Q200,214 205,218" fill="none" stroke="#6b2a2a" stroke-width="1.5"/>
+    <!-- Nose highlight -->
+    <ellipse cx="197" cy="220" rx="3" ry="2" fill="white" opacity="0.3"/>
+
+    <!-- Mouth -->
+    <path d="M200,230 Q192,238 186,234" fill="none" stroke="#8b3a3a" stroke-width="2" stroke-linecap="round"/>
+    <path d="M200,230 Q208,238 214,234" fill="none" stroke="#8b3a3a" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- Whisker dots -->
+    <circle cx="175" cy="232" r="2" fill="#c98818" opacity="0.6"/>
+    <circle cx="183" cy="236" r="2" fill="#c98818" opacity="0.6"/>
+    <circle cx="225" cy="232" r="2" fill="#c98818" opacity="0.6"/>
+    <circle cx="217" cy="236" r="2" fill="#c98818" opacity="0.6"/>
+
+    <!-- Whiskers -->
+    <line x1="172" y1="228" x2="128" y2="222" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+    <line x1="174" y1="233" x2="128" y2="233" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+    <line x1="174" y1="238" x2="130" y2="244" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+    <line x1="228" y1="228" x2="272" y2="222" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+    <line x1="226" y1="233" x2="272" y2="233" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+    <line x1="226" y1="238" x2="270" y2="244" stroke="#f5a623" stroke-width="1.2" opacity="0.5"/>
+
+    <!-- Chin fur -->
+    <ellipse cx="200" cy="255" rx="28" ry="14" fill="#f0b840" opacity="0.7"/>
+    <ellipse cx="200" cy="252" rx="20" ry="10" fill="#f5c050" opacity="0.5"/>
+
+  </g>
+
+  <!-- ── LDA TEXT ── -->
+  <!-- Text background pill -->
+  <rect x="118" y="315" width="164" height="44" rx="22" fill="#0e0e22" opacity="0.92" stroke="url(#goldGrad)" stroke-width="1.5"/>
+
+  <!-- LDA text -->
+  <text x="200" y="346" font-family="'Arial Black', 'Arial Bold', sans-serif" font-weight="900"
+        font-size="26" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="6">LDA</text>
+
+  <!-- Teal accent dots -->
+  <circle cx="130" cy="337" r="3" fill="url(#tealGrad)" opacity="0.8"/>
+  <circle cx="270" cy="337" r="3" fill="url(#tealGrad)" opacity="0.8"/>
+
+  <!-- Corner teal accents on ring -->
+  <circle cx="200" cy="16" r="4" fill="url(#tealGrad)" opacity="0.7" filter="url(#glow)"/>
+  <circle cx="200" cy="384" r="4" fill="url(#tealGrad)" opacity="0.7" filter="url(#glow)"/>
+  <circle cx="16" cy="200" r="4" fill="url(#tealGrad)" opacity="0.7" filter="url(#glow)"/>
+  <circle cx="384" cy="200" r="4" fill="url(#tealGrad)" opacity="0.7" filter="url(#glow)"/>
+
+</svg>
