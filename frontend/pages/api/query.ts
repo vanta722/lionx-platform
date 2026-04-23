@@ -284,7 +284,6 @@ const _inMemoryUsed      = new Map<string, number>()
 const _inMemoryCooldowns = new Map<string, number>()
 const _rateLimitMap      = new Map<string, { count: number; resetAt: number }>()
 const REPLAY_TTL_MS      = 20 * 60 * 1000
-const WALLET_COOLDOWN_MS = 5  * 60 * 1000
 
 // ── Rate limiting: max 10 requests per IP per minute ──────────
 // FIX-1: rate limit now backed by KV — works across all Vercel instances
