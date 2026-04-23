@@ -5,9 +5,10 @@ import Navbar from '../components/Navbar'
 import { useWallet } from '../components/WalletProvider'
 
 const TOOLS = [
-  { id: 'WALLET_ANALYZER',  icon: '🔍', name: 'Wallet Analyzer',    shortName: 'Wallet',   desc: 'Deep-dive any Tron wallet — portfolio, patterns, risk score',     cost: 50,  inputLabel: 'Wallet Address',  placeholder: 'Enter TRX wallet address...' },
-  { id: 'CONTRACT_AUDITOR', icon: '🛡️', name: 'Contract Auditor',   shortName: 'Contract', desc: 'Scan TRC-20 contracts for honeypots, rugs and hidden risks',       cost: 100, inputLabel: 'Contract Address', placeholder: 'Enter contract address...'   },
-  { id: 'MARKET_INTEL',     icon: '📊', name: 'Market Intelligence', shortName: 'Market',   desc: 'AI-powered token sentiment, holder trends and market signals',     cost: 25,  inputLabel: 'Token Name or Address', placeholder: 'e.g. MANES or contract...' },
+  { id: 'WALLET_ANALYZER',  icon: '🔍', name: 'Wallet Analyzer',    shortName: 'Wallet',   desc: 'Deep-dive any Tron wallet — portfolio, patterns, risk score',                              cost: 50,  inputLabel: 'Wallet Address',        placeholder: 'Enter TRX wallet address...',    noInput: false },
+  { id: 'CONTRACT_AUDITOR', icon: '🛡️', name: 'Contract Auditor',   shortName: 'Contract', desc: 'Scan TRC-20 contracts for honeypots, rugs and hidden risks',                              cost: 100, inputLabel: 'Contract Address',      placeholder: 'Enter contract address...',      noInput: false },
+  { id: 'MARKET_INTEL',     icon: '📊', name: 'Market Intelligence', shortName: 'Market',   desc: 'AI-powered token sentiment, holder trends and market signals',                            cost: 25,  inputLabel: 'Token Name or Address', placeholder: 'e.g. MANES or contract...',      noInput: false },
+  { id: 'MLB_PICKS',        icon: '⚾', name: 'MLB Picks',           shortName: 'MLB',      desc: '2 daily conviction picks. Pitcher edges, public fades, total angles. Max 2 bets — no noise.', cost: 75,  inputLabel: null,                    placeholder: null,                             noInput: true  },
 ]
 
 type RunState = 'idle' | 'sending' | 'running' | 'done' | 'error'
@@ -91,7 +92,8 @@ export default function Tools() {
   }
 
   async function runQuery() {
-    if (!connected || !input.trim()) return
+    if (!connected) return
+    if (!tool.noInput && !input.trim()) return
     setRunState('sending')
     setResult(null)
     try {
@@ -137,10 +139,14 @@ export default function Tools() {
       const timeout = setTimeout(() => controller.abort(), 45000)
       let res: Response
       try {
-        res = await fetch('/api/query', {
+        const apiEndpoint = tool.noInput ? '/api/mlb-picks' : '/api/query'
+        const apiBody     = tool.noInput
+          ? JSON.stringify({ address, sig, nonce })
+          : JSON.stringify({ tool: tool.id, input, address, sig, nonce })
+        res = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tool: tool.id, input, address, sig, nonce }),
+          body: apiBody,
           signal: controller.signal,
         })
       } catch (e: any) {
@@ -156,8 +162,8 @@ export default function Tools() {
       setResult(data)
       setRunState('done')
       // MED-3: don't store full address in history — mask middle chars
-      const maskedInput = input.length > 10 ? input.slice(0,6) + '...' + input.slice(-4) : input
-      setHistory(h => [{ tool: tool.name, input: maskedInput, cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict }, ...h.slice(0,19)])
+      const maskedInput = tool.noInput ? 'today' : (input.length > 10 ? input.slice(0,6) + '...' + input.slice(-4) : input)
+      setHistory(h => [{ tool: tool.name, input: maskedInput, cost: tool.cost, time: new Date().toLocaleTimeString(), score: data.score, verdict: data.verdict || (data.picks ? '⚾ Picks ready' : undefined) }, ...h.slice(0,19)])
     } catch (e: any) {
       setRunState('error')
       setResult({ error: String(e?.message || e || 'Unknown error') })
@@ -226,14 +232,16 @@ export default function Tools() {
             <div className="flex flex-1 overflow-hidden">
               {/* Input */}
               <div className="flex flex-col gap-4 p-5 overflow-y-auto flex-shrink-0" style={{ width: 320, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#4a5a6a' }}>{tool.inputLabel}</div>
-                  <input value={input} onChange={e => setInput(e.target.value)} placeholder={tool.placeholder}
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none font-mono"
-                    style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.06)', color: '#dde8f0' }}
-                    onFocus={e => e.target.style.borderColor = '#14b8a6'}
-                    onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
-                </div>
+                {!tool.noInput && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#4a5a6a' }}>{tool.inputLabel}</div>
+                    <input value={input} onChange={e => setInput(e.target.value)} placeholder={tool.placeholder ?? ''}
+                      className="w-full px-4 py-3 rounded-xl text-sm outline-none font-mono"
+                      style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.06)', color: '#dde8f0' }}
+                      onFocus={e => e.target.style.borderColor = '#14b8a6'}
+                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
+                  </div>
+                )}
                 <div className="rounded-xl p-4" style={{ background: '#0c0c18' }}>
                   {[['Tool Cost',`${tool.cost} LDA`],['Burn (70%)',`${Math.floor(tool.cost*.7)} LDA 🔥`],['Treasury (30%)',`${Math.ceil(tool.cost*.3)} LDA`],['Balance After', connected ? `${Math.max(0,balance-tool.cost).toLocaleString()} LDA` : '—']].map(([k,v]) => (
                     <div key={k} className="flex justify-between text-xs py-2 border-b last:border-0" style={{ borderColor: 'rgba(255,255,255,0.04)', color: '#7a8a9a' }}>
@@ -253,7 +261,7 @@ export default function Tools() {
                     </a>
                   </>
                 ) : runState === 'idle' || runState === 'error' ? (
-                  <button onClick={runQuery} disabled={!input.trim()} className="w-full py-3.5 rounded-xl font-extrabold text-sm disabled:opacity-40" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>⚡ Run Analysis</button>
+                  <button onClick={runQuery} disabled={!tool.noInput && !input.trim()} className="w-full py-3.5 rounded-xl font-extrabold text-sm disabled:opacity-40" style={{ background: 'linear-gradient(135deg,#14b8a6,#0d9488)', color: '#000', border:'none', fontFamily:'inherit' }}>{tool.noInput ? "⚾ Get Today's Picks" : "⚡ Run Analysis"}</button>
                 ) : (
                   <button disabled className="w-full py-3.5 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2" style={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6', border:'none', fontFamily:'inherit' }}>
                     <span className="w-3.5 h-3.5 rounded-full border-2 border-transparent" style={{ borderTopColor: '#14b8a6', animation: 'spin 0.7s linear infinite' }}/>
@@ -281,7 +289,9 @@ export default function Tools() {
                       ))}
                     </div>
                   )}
-                  {runState === 'done' && result && !result.error && <ResultDisplay result={result}/>}
+                  {runState === 'done' && result && !result.error && (
+                    tool.noInput ? <MlbPicksDisplay result={result}/> : <ResultDisplay result={result}/>
+                  )}
                   {runState === 'error' && result?.error && <div className="p-4 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>❌ {result.error}</div>}
                 </div>
               </div>
@@ -333,14 +343,16 @@ export default function Tools() {
           </div>
 
           {/* Input */}
-          <div className="mb-3">
-            <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#4a5a6a' }}>{tool.inputLabel}</div>
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder={tool.placeholder}
-              className="w-full px-4 py-3.5 rounded-xl text-sm outline-none font-mono"
-              style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.06)', color: '#dde8f0' }}
-              onFocus={e => e.target.style.borderColor = '#14b8a6'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
-          </div>
+          {!tool.noInput && (
+            <div className="mb-3">
+              <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#4a5a6a' }}>{tool.inputLabel}</div>
+              <input value={input} onChange={e => setInput(e.target.value)} placeholder={tool.placeholder ?? ''}
+                className="w-full px-4 py-3.5 rounded-xl text-sm outline-none font-mono"
+                style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.06)', color: '#dde8f0' }}
+                onFocus={e => e.target.style.borderColor = '#14b8a6'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.06)'}/>
+            </div>
+          )}
 
           {/* Cost */}
           <div className="flex items-center justify-between px-4 py-3 rounded-xl mb-4" style={{ background: '#0c0c18', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -363,8 +375,10 @@ export default function Tools() {
               </a>
             </>
           ) : runState === 'idle' || runState === 'error' || runState === 'done' ? (
-            <button onClick={runQuery} disabled={!input.trim()} className="w-full py-4 rounded-xl font-extrabold text-base mb-4 disabled:opacity-40" style={{ background: runState === 'done' ? 'rgba(20,184,166,0.15)' : 'linear-gradient(135deg,#14b8a6,#0d9488)', color: runState === 'done' ? '#14b8a6' : '#000', border: runState === 'done' ? '1px solid rgba(20,184,166,0.3)' : 'none', fontFamily:'inherit' }}>
-              {runState === 'done' ? '🔄 Run New Analysis' : `⚡ Run ${tool.shortName} Analysis`}
+            <button onClick={runQuery} disabled={!tool.noInput && !input.trim()} className="w-full py-4 rounded-xl font-extrabold text-base mb-4 disabled:opacity-40" style={{ background: runState === 'done' ? 'rgba(20,184,166,0.15)' : 'linear-gradient(135deg,#14b8a6,#0d9488)', color: runState === 'done' ? '#14b8a6' : '#000', border: runState === 'done' ? '1px solid rgba(20,184,166,0.3)' : 'none', fontFamily:'inherit' }}>
+              {runState === 'done'
+                ? (tool.noInput ? '🔄 Get Fresh Picks' : '🔄 Run New Analysis')
+                : (tool.noInput ? "⚾ Get Today's Picks" : `⚡ Run ${tool.shortName} Analysis`)}
             </button>
           ) : (
             <button disabled className="w-full py-4 rounded-xl font-extrabold text-base mb-4 flex items-center justify-center gap-3" style={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6', border:'none', fontFamily:'inherit' }}>
@@ -385,10 +399,11 @@ export default function Tools() {
           {runState === 'done' && result && !result.error && (
             <div>
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#22c55e' }}>✅ Analysis Complete</span>
-
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#22c55e' }}>
+                  {tool.noInput ? '⚾ Picks Ready' : '✅ Analysis Complete'}
+                </span>
               </div>
-              <ResultDisplay result={result}/>
+              {tool.noInput ? <MlbPicksDisplay result={result}/> : <ResultDisplay result={result}/>}
             </div>
           )}
 
@@ -434,6 +449,56 @@ export default function Tools() {
   )
 }
 
+// ── MLB Picks result card ─────────────────────────────────────────────────────
+function MlbPicksDisplay({ result }: { result: { picks: string; gamesAnalyzed: number; timestamp: string } }) {
+  // Split the picks text into individual lines for colour-coded rendering
+  const lines = (result.picks || '').split('\n')
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl p-4 overflow-hidden" style={{ background: '#07100e', border: '1px solid rgba(34,197,94,0.25)' }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#22c55e' }}>⚾ Today's Conviction Picks</div>
+          {result.gamesAnalyzed > 0 && (
+            <div className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.15)' }}>
+              {result.gamesAnalyzed} games
+            </div>
+          )}
+        </div>
+        <div className="space-y-0.5">
+          {lines.map((line, i) => {
+            const isPickLine  = /^PICK\s*\d+:/i.test(line.trim())
+            const isEdge      = /^Edge:/i.test(line.trim())
+            const isMeta      = /^(Record:|Confidence:)/i.test(line.trim())
+            const isEmpty     = line.trim() === ''
+            if (isEmpty) return <div key={i} className="h-3"/>
+            return (
+              <div key={i} className="font-mono text-sm leading-relaxed"
+                style={{
+                  color: isPickLine ? '#22c55e'
+                       : isEdge     ? '#14b8a6'
+                       : isMeta     ? '#f5a623'
+                       : '#7a8a9a',
+                  fontWeight: isPickLine ? 700 : 400,
+                }}>
+                {isPickLine ? `⚾ ${line}` : line}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-1">
+        <div className="text-xs" style={{ color: '#2a3a4a' }}>
+          ⚠️ For entertainment only — not financial advice
+        </div>
+        <div className="text-xs" style={{ color: '#2a3a4a' }}>
+          {result.timestamp ? new Date(result.timestamp).toLocaleTimeString() : ''}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Blockchain tool result card ───────────────────────────────────────────────
 function ResultDisplay({ result }: { result: any }) {
   return (
     <div className="space-y-3">

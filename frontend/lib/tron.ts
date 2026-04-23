@@ -22,12 +22,14 @@ export const TOOL_IDS = {
   WALLET_ANALYZER:  'WALLET_ANALYZER',
   CONTRACT_AUDITOR: 'CONTRACT_AUDITOR',
   MARKET_INTEL:     'MARKET_INTEL',
+  MLB_PICKS:        'MLB_PICKS',
 }
 
 export const TOOL_COSTS = {
   WALLET_ANALYZER:  50,
   CONTRACT_AUDITOR: 100,
   MARKET_INTEL:     25,
+  MLB_PICKS:        75,
 }
 
 // ── Wallet Connection ──

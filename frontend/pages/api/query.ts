@@ -341,6 +341,7 @@ const TOOL_COSTS: Record<string, number> = {
   WALLET_ANALYZER:  50,
   CONTRACT_AUDITOR: 100,
   MARKET_INTEL:     25,
+  MLB_PICKS:        75,
 }
 
 // Per-wallet cooldown: prevent same wallet from hammering same tool back-to-back
