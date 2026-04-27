@@ -47,3 +47,22 @@ input, textarea, button, select { font-family: inherit; }
 }
 .glow-teal { box-shadow: 0 0 20px rgba(20,184,166,0.3); }
 .glow-gold { box-shadow: 0 0 20px rgba(245,166,35,0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  [data-ticker],
+  .ticker,
+  .animate-ticker,
+  .animate-breathe,
+  .animate-scan,
+  .animate-spin,
+  .animate-float,
+  [style*='ticker'],
+  [style*='breathe'],
+  [style*='scan'],
+  [style*='spin'],
+  [style*='float'] {
+    animation: none !important;
+  }
+}
