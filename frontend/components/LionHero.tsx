@@ -9,7 +9,11 @@ export default function LionHero() {
   const [scanning,  setScanning]  = useState(false)
   const [glitching, setGlitching] = useState(false)
   const [isMobile,  setIsMobile]  = useState(false)
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
+  const [parallaxStyle, setParallaxStyle] = useState({ transform: 'translate3d(0px, 0px, 0)' })
   const sectionRef = useRef<HTMLDivElement>(null)
+  const rafRef = useRef<number>(0)
+  const pointerTargetRef = useRef({ x: 0, y: 0 })
   const isPageVisible = usePageVisible()
   const isHeroInViewport = useInViewport(sectionRef, { threshold: 0.2 })
   const reducedMotion = useReducedMotion()
@@ -21,6 +25,59 @@ export default function LionHero() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: coarse)')
+    const syncPointer = () => setIsCoarsePointer(media.matches)
+    syncPointer()
+    media.addEventListener('change', syncPointer)
+    return () => media.removeEventListener('change', syncPointer)
+  }, [])
+
+  useEffect(() => {
+    if (isMobile || isCoarsePointer) {
+      setParallaxStyle({ transform: 'translate3d(0px, 0px, 0)' })
+      return
+    }
+
+    const updateParallax = () => {
+      rafRef.current = 0
+      const nx = pointerTargetRef.current.x
+      const ny = pointerTargetRef.current.y
+      setParallaxStyle({
+        transform: `translate3d(${(nx * 10).toFixed(2)}px, ${(ny * 8).toFixed(2)}px, 0)`,
+      })
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      const section = sectionRef.current
+      if (!section || e.pointerType === 'touch') return
+      const rect = section.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      pointerTargetRef.current = {
+        x: (e.clientX - cx) / rect.width,
+        y: (e.clientY - cy) / rect.height,
+      }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(updateParallax)
+    }
+
+    const onPointerLeave = () => {
+      pointerTargetRef.current = { x: 0, y: 0 }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(updateParallax)
+    }
+
+    const section = sectionRef.current
+    if (!section) return
+    section.addEventListener('pointermove', onPointerMove)
+    section.addEventListener('pointerleave', onPointerLeave)
+
+    return () => {
+      section.removeEventListener('pointermove', onPointerMove)
+      section.removeEventListener('pointerleave', onPointerLeave)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [isMobile, isCoarsePointer])
 
   // Matrix rain
   useEffect(() => {
@@ -262,7 +319,9 @@ export default function LionHero() {
       <div className="relative z-10 flex flex-col items-center"
         style={{
           transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          transform: loaded ? 'scale(1) translateY(0)' : 'scale(0.3) translateY(40px)',
+          transform: loaded
+            ? `scale(1) translateY(0) ${parallaxStyle.transform}`
+            : 'scale(0.3) translateY(40px)',
           opacity: loaded ? 1 : 0,
         }}>
 
