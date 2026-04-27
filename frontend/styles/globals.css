@@ -18,8 +18,6 @@ body { background: #050508; color: #dde8f0; font-family: 'Space Grotesk', sans-s
 * { -webkit-tap-highlight-color: transparent; }
 /* Ensure page scrolls on mobile */
 html, body { touch-action: pan-y; }
-/* Activity ticker doesn't block touch */
-[data-ticker] { pointer-events: none; }
 input, textarea, button, select { font-family: inherit; }
 /* Hide horizontal scrollbar on tool chips */
 .chips-scroll::-webkit-scrollbar { display: none; }

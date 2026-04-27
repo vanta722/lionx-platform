@@ -3,7 +3,7 @@
  * Polls Tronscan for real LDA transfers to treasury every 15s
  * Falls back to demo events if no real activity yet
  */
-import { useEffect, useRef, useState } from 'react'
+import { type TouchEvent, useEffect, useRef, useState } from 'react'
 
 const TREASURY = process.env.NEXT_PUBLIC_TREASURY || 'TG1ZuSqJdgmD11i2FyCXxtjBbTEiEzRVQy'
 const LDA_TOKEN = 'TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1'
@@ -37,7 +37,10 @@ const DEMO: TickerEvent[] = [
 export default function ActivityTicker() {
   const [events, setEvents]   = useState<TickerEvent[]>(DEMO)
   const [paused, setPaused]   = useState(false)
+  const [isFrozen, setIsFrozen] = useState(false)
   const trackRef              = useRef<HTMLDivElement>(null)
+  const freezeTimeoutRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartRef         = useRef<{ x: number; y: number; ts: number } | null>(null)
 
   useEffect(() => {
     const seen = new Set<string>()
@@ -89,20 +92,78 @@ export default function ActivityTicker() {
     return () => clearInterval(t)
   }, [])
 
+  useEffect(() => () => {
+    if (freezeTimeoutRef.current) clearTimeout(freezeTimeoutRef.current)
+  }, [])
+
+  function clearFreezeTimer() {
+    if (freezeTimeoutRef.current) {
+      clearTimeout(freezeTimeoutRef.current)
+      freezeTimeoutRef.current = null
+    }
+  }
+
+  function freezeForFiveSeconds() {
+    clearFreezeTimer()
+    setIsFrozen(true)
+    setPaused(true)
+    freezeTimeoutRef.current = setTimeout(() => {
+      setIsFrozen(false)
+      setPaused(false)
+      freezeTimeoutRef.current = null
+    }, 5000)
+  }
+
+  function handleTouchStart(e: TouchEvent<HTMLDivElement>) {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY, ts: Date.now() }
+    if (!isFrozen) setPaused(true)
+  }
+
+  function handleTouchEnd(e: TouchEvent<HTMLDivElement>) {
+    const t = e.changedTouches[0]
+    const start = touchStartRef.current
+    const elapsed = start ? Date.now() - start.ts : Number.POSITIVE_INFINITY
+    const movedX = start ? Math.abs(start.x - t.clientX) : Number.POSITIVE_INFINITY
+    const movedY = start ? Math.abs(start.y - t.clientY) : Number.POSITIVE_INFINITY
+    const isTap = elapsed <= 350 && movedX <= 12 && movedY <= 12
+
+    if (isTap) {
+      if (isFrozen) {
+        clearFreezeTimer()
+        setIsFrozen(false)
+        setPaused(false)
+      } else {
+        freezeForFiveSeconds()
+      }
+      return
+    }
+
+    if (!isFrozen) setPaused(false)
+  }
+
   // Duplicate events for seamless loop
   const display = [...events, ...events]
 
   return (
     <div
-      className="w-full overflow-hidden"
+      className="activity-ticker w-full overflow-hidden"
+      data-ticker
+      role="region"
+      aria-label="Live LDA burn activity feed"
+      aria-live="polite"
+      aria-atomic="false"
       style={{
         background: 'rgba(5,5,8,0.95)',
         borderBottom: '1px solid rgba(20,184,166,0.1)',
         height: 36,
         position: 'relative',
       }}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => { if (!isFrozen) setPaused(true) }}
+      onMouseLeave={() => { if (!isFrozen) setPaused(false) }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => { if (!isFrozen) setPaused(false) }}
     >
       {/* Left fade */}
       <div style={{ position:'absolute', left:0, top:0, bottom:0, width:60, background:'linear-gradient(to right, #050508, transparent)', zIndex:2, pointerEvents:'none' }}/>
@@ -110,7 +171,7 @@ export default function ActivityTicker() {
       <div style={{ position:'absolute', right:0, top:0, bottom:0, width:60, background:'linear-gradient(to left, #050508, transparent)', zIndex:2, pointerEvents:'none' }}/>
 
       {/* Live badge */}
-      <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', zIndex:3, display:'flex', alignItems:'center', gap:5 }}>
+      <div className="ticker-live-badge" style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', zIndex:3, display:'flex', alignItems:'center', gap:5 }}>
         <span style={{ width:6, height:6, borderRadius:'50%', background:'#ef4444', boxShadow:'0 0 6px #ef4444', display:'block', animation:'breathe 2s infinite' }}/>
         <span style={{ fontSize:10, fontWeight:800, color:'#ef4444', letterSpacing:1, textTransform:'uppercase' }}>Live</span>
       </div>
@@ -118,6 +179,7 @@ export default function ActivityTicker() {
       {/* Scrolling track */}
       <div
         ref={trackRef}
+        className="ticker-track"
         style={{
           display:    'flex',
           alignItems: 'center',
@@ -130,15 +192,15 @@ export default function ActivityTicker() {
         }}
       >
         {display.map((ev, i) => (
-          <span key={`${ev.id}-${i}`} style={{ display:'inline-flex', alignItems:'center', gap:6, paddingRight:40 }}>
-            <span style={{ fontSize:11, color:'#4a5a6a' }}>🔥</span>
-            <span style={{ fontSize:11, fontWeight:700, color:'#14b8a6' }}>{ev.wallet}</span>
-            <span style={{ fontSize:11, color:'#7a8a9a' }}>burned</span>
-            <span style={{ fontSize:11, fontWeight:800, color:'#f5a623' }}>{ev.amount} LDA</span>
-            <span style={{ fontSize:11, color:'#7a8a9a' }}>for</span>
-            <span style={{ fontSize:11, fontWeight:700, color:'#dde8f0' }}>{ev.tool}</span>
-            <span style={{ fontSize:10, color:'#2a3a4a' }}>· {ev.time}</span>
-            <span style={{ color:'rgba(20,184,166,0.2)', fontSize:11, marginLeft:8 }}>|</span>
+          <span className="ticker-item" key={`${ev.id}-${i}`} style={{ display:'inline-flex', alignItems:'center', gap:6, paddingRight:40 }}>
+            <span className="ticker-icon" style={{ fontSize:11, color:'#4a5a6a' }}>🔥</span>
+            <span className="ticker-text" style={{ fontSize:11, fontWeight:700, color:'#14b8a6' }}>{ev.wallet}</span>
+            <span className="ticker-text" style={{ fontSize:11, color:'#7a8a9a' }}>burned</span>
+            <span className="ticker-text" style={{ fontSize:11, fontWeight:800, color:'#f5a623' }}>{ev.amount} LDA</span>
+            <span className="ticker-text" style={{ fontSize:11, color:'#7a8a9a' }}>for</span>
+            <span className="ticker-text" style={{ fontSize:11, fontWeight:700, color:'#dde8f0' }}>{ev.tool}</span>
+            <span className="ticker-time" style={{ fontSize:10, color:'#2a3a4a' }}>· {ev.time}</span>
+            <span className="ticker-separator" style={{ color:'rgba(20,184,166,0.2)', fontSize:11, marginLeft:8 }}>|</span>
           </span>
         ))}
       </div>
@@ -151,6 +213,30 @@ export default function ActivityTicker() {
         @keyframes breathe {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.3; }
+        }
+        @media (max-width: 768px) {
+          .activity-ticker {
+            height: 48px !important;
+          }
+          .ticker-live-badge {
+            left: 10px !important;
+            gap: 6px !important;
+          }
+          .ticker-track {
+            padding-left: 88px !important;
+          }
+          .ticker-item {
+            gap: 8px !important;
+            padding-right: 52px !important;
+          }
+          .ticker-text {
+            font-size: 12px !important;
+          }
+          .ticker-time,
+          .ticker-icon,
+          .ticker-separator {
+            font-size: 11px !important;
+          }
         }
       `}</style>
     </div>
