@@ -21,12 +21,59 @@ export default function Home() {
   const [totalBurned, setTotalBurned]   = useState(1_050_000) // confirmed black hole balance
   const [displayBurned, setDisplayBurned] = useState(1_050_000)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [hudFx, setHudFx] = useState({ opacity: 1, blur: 0 })
 
   useEffect(() => {
     const syncIsDesktop = () => setIsDesktop(window.innerWidth >= 768)
     syncIsDesktop()
     window.addEventListener('resize', syncIsDesktop)
     return () => window.removeEventListener('resize', syncIsDesktop)
+  }, [])
+
+  useEffect(() => {
+    if (!heroSectionRef.current) return
+    let rafId = 0
+    let active = false
+
+    const updateHudFx = () => {
+      rafId = 0
+      const section = heroSectionRef.current
+      if (!section) return
+      const rect = section.getBoundingClientRect()
+      const vh = window.innerHeight || 1
+      const start = vh * 0.2
+      const travel = Math.max(rect.height + start, 1)
+      const progress = Math.min(Math.max((start - rect.top) / travel, 0), 1)
+      setHudFx({
+        opacity: 1 - progress * 0.45,
+        blur: progress * 7,
+      })
+    }
+
+    const requestUpdate = () => {
+      if (!active || rafId) return
+      rafId = requestAnimationFrame(updateHudFx)
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        active = entry.isIntersecting
+        if (active) requestUpdate()
+      },
+      { threshold: [0, 0.15, 0.35, 0.7, 1] },
+    )
+
+    observer.observe(heroSectionRef.current)
+    window.addEventListener('scroll', requestUpdate, { passive: true })
+    window.addEventListener('resize', requestUpdate)
+    requestUpdate()
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', requestUpdate)
+      window.removeEventListener('resize', requestUpdate)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [])
 
   // Particle canvas
@@ -189,17 +236,35 @@ export default function Home() {
       <div className="hidden md:block"><CursorTrail active={isDesktop && isPageVisible && isHeroInViewport}/></div>
 
       {/* HERO */}
-      <section ref={heroSectionRef} className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
+      <section
+        ref={heroSectionRef}
+        className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16"
+        style={{
+          ['--hud-opacity' as any]: hudFx.opacity.toFixed(3),
+          ['--hud-blur' as any]: `${hudFx.blur.toFixed(2)}px`,
+        }}>
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(20,184,166,0.09) 0%,transparent 60%)'
+          background: 'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(20,184,166,0.09) 0%,transparent 60%)',
+          opacity: 'var(--hud-opacity)',
+          filter: 'blur(var(--hud-blur))',
+          transition: 'opacity 220ms linear, filter 280ms linear',
         }}/>
 
         <div className="relative z-10 max-w-4xl">
           {/* Digital Lion — full cinematic on desktop, lightweight on mobile */}
-          <LionHero/>
+          <div style={{ minHeight: isDesktop ? 440 : 220 }}>
+            <LionHero/>
+          </div>
 
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
-            style={{ border: '1px solid rgba(20,184,166,0.3)', background: 'rgba(20,184,166,0.08)', color: '#2dd4bf' }}>
+            style={{
+              border: '1px solid rgba(20,184,166,0.3)',
+              background: 'rgba(20,184,166,0.08)',
+              color: '#2dd4bf',
+              opacity: 'var(--hud-opacity)',
+              filter: 'blur(calc(var(--hud-blur) * 0.35))',
+              transition: 'opacity 220ms linear, filter 220ms linear',
+            }}>
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#14b8a6', boxShadow: '0 0 8px #14b8a6', animation: 'breathe 2s infinite' }}/>
             Lion X is Live — AI Tools Powered by LDA
           </div>
@@ -234,13 +299,13 @@ export default function Home() {
 
           <div className="flex gap-3 justify-center flex-wrap">
             <Link href="/tools"
-              className="px-8 py-3.5 rounded-xl font-extrabold text-base no-underline transition-all"
+              className="px-8 py-3.5 rounded-xl font-extrabold text-base no-underline transition-all cta-micro-feedback"
               style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 4px 20px rgba(245,166,35,0.25)' }}>
               ⚡ Launch App
             </Link>
             <a href="https://sunswap.com/?utm_source=tronlink#/v1?lang=en-US&t1=TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1&t0=T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb&type=swap"
               target="_blank" rel="noopener noreferrer"
-              className="px-8 py-3.5 rounded-xl font-bold text-base no-underline transition-all"
+              className="px-8 py-3.5 rounded-xl font-bold text-base no-underline transition-all cta-micro-feedback"
               style={{ border: '1px solid #14b8a6', color: '#14b8a6', background: 'transparent' }}>
               🛒 Get LDA
             </a>
@@ -314,7 +379,7 @@ export default function Home() {
         </h2>
         <p className="text-base mb-10 relative" style={{ color: '#7a8a9a' }}>Burn LDA to access AI-powered wallet analysis, contract audits and market intelligence.</p>
         <Link href="/tools"
-          className="relative inline-block px-10 py-4 rounded-xl font-extrabold text-base no-underline"
+          className="relative inline-block px-10 py-4 rounded-xl font-extrabold text-base no-underline cta-micro-feedback"
           style={{ background: 'linear-gradient(135deg,#f5a623,#e08e00)', color: '#000', boxShadow: '0 6px 28px rgba(245,166,35,0.35)' }}>
           ⚡ Start Using AI Tools
         </Link>
@@ -333,6 +398,29 @@ export default function Home() {
         </div>
         <span className="text-xs" style={{ color: '#4a5a6a' }}>© 2026 Lion X Ecosystem · Built on Tron</span>
       </footer>
+      <style jsx>{`
+        .cta-micro-feedback {
+          will-change: transform, box-shadow;
+          transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+        .cta-micro-feedback:hover,
+        .cta-micro-feedback:focus-visible,
+        .cta-micro-feedback:active {
+          animation: cta-pulse 380ms ease-out 1;
+          transform: translateY(-1px) scale(1.01);
+        }
+        @keyframes cta-pulse {
+          0% {
+            box-shadow: 0 0 0 rgba(245, 166, 35, 0);
+          }
+          55% {
+            box-shadow: 0 0 0 8px rgba(245, 166, 35, 0.2), 0 0 20px rgba(245, 166, 35, 0.35);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(245, 166, 35, 0), 0 0 0 rgba(245, 166, 35, 0);
+          }
+        }
+      `}</style>
     </>
   )
 }
