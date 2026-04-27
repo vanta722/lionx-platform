@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useInViewport, usePageVisible } from '../hooks/animationVisibility'
 
 export default function LionHero() {
   const canvasRef   = useRef<HTMLCanvasElement>(null)
@@ -7,6 +8,9 @@ export default function LionHero() {
   const [scanning,  setScanning]  = useState(false)
   const [glitching, setGlitching] = useState(false)
   const [isMobile,  setIsMobile]  = useState(false)
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const isPageVisible = usePageVisible()
+  const isHeroInViewport = useInViewport(sectionRef, { threshold: 0.2 })
 
   // Detect mobile after mount to avoid SSR/hydration mismatch
   useEffect(() => {
@@ -18,14 +22,21 @@ export default function LionHero() {
 
   // Matrix rain
   useEffect(() => {
+    if (isMobile || !isPageVisible || !isHeroInViewport) return
+
     const canvas = matrixRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    canvas.width  = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
-    const cols    = Math.floor(canvas.width / 14)
-    const drops   = Array(cols).fill(1)
-    const chars   = '01アイウエオカキクケコサシスセソタチツLDALIONXTRONAIWEB3DeFi'
+
+    const resizeCanvas = () => {
+      canvas.width = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
+
+    resizeCanvas()
+    const cols = Math.max(1, Math.floor(canvas.width / 14))
+    const drops = Array(cols).fill(1)
+    const chars = '01アイウエオカキクケコサシスセソタチツLDALIONXTRONAIWEB3DeFi'
 
     const draw = () => {
       ctx.fillStyle = 'rgba(5,5,8,0.07)'
@@ -39,47 +50,62 @@ export default function LionHero() {
         drops[i]++
       })
     }
+
+    window.addEventListener('resize', resizeCanvas)
+    draw()
     const id = setInterval(draw, 55)
-    return () => clearInterval(id)
-  }, [])
+
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('resize', resizeCanvas)
+    }
+  }, [isMobile, isPageVisible, isHeroInViewport])
 
   // Orbit particles canvas
   useEffect(() => {
+    if (isMobile || !isPageVisible || !isHeroInViewport) return
+
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    const W = canvas.width = canvas.offsetWidth
-    const H = canvas.height = canvas.offsetHeight
-    const cx = W / 2, cy = H / 2
-    let t = 0, animId: number
+    let t = 0
+    let animId = 0
 
     const orbits = [
-      { r: 130, count: 8,  speed: 0.008, size: 2.5, color: '#f5a623', phase: 0    },
-      { r: 165, count: 12, speed: 0.005, size: 1.8, color: '#14b8a6', phase: 1.2  },
-      { r: 200, count: 6,  speed: 0.003, size: 3.0, color: '#f5a623', phase: 2.1  },
+      { r: 130, count: 8, speed: 0.008, size: 2.5, color: '#f5a623', phase: 0 },
+      { r: 165, count: 12, speed: 0.005, size: 1.8, color: '#14b8a6', phase: 1.2 },
+      { r: 200, count: 6, speed: 0.003, size: 3.0, color: '#f5a623', phase: 2.1 },
     ]
 
+    const resizeCanvas = () => {
+      canvas.width = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
+
     const draw = () => {
+      const W = canvas.width
+      const H = canvas.height
+      const cx = W / 2
+      const cy = H / 2
+
       ctx.clearRect(0, 0, W, H)
       t += 1
 
       orbits.forEach(o => {
-        // Orbit ring
         ctx.beginPath()
         ctx.arc(cx, cy, o.r, 0, Math.PI * 2)
         ctx.strokeStyle = o.color === '#f5a623' ? 'rgba(245,166,35,0.07)' : 'rgba(20,184,166,0.07)'
-        ctx.lineWidth   = 1
+        ctx.lineWidth = 1
         ctx.stroke()
 
-        // Particles on orbit
         for (let i = 0; i < o.count; i++) {
           const angle = (i / o.count) * Math.PI * 2 + t * o.speed + o.phase
-          const px    = cx + o.r * Math.cos(angle)
-          const py    = cy + o.r * Math.sin(angle)
-          const glow  = ctx.createRadialGradient(px, py, 0, px, py, o.size * 3)
-          glow.addColorStop(0,   o.color + 'ff')
+          const px = cx + o.r * Math.cos(angle)
+          const py = cy + o.r * Math.sin(angle)
+          const glow = ctx.createRadialGradient(px, py, 0, px, py, o.size * 3)
+          glow.addColorStop(0, o.color + 'ff')
           glow.addColorStop(0.5, o.color + '88')
-          glow.addColorStop(1,   o.color + '00')
+          glow.addColorStop(1, o.color + '00')
           ctx.beginPath()
           ctx.arc(px, py, o.size, 0, Math.PI * 2)
           ctx.fillStyle = glow
@@ -87,7 +113,6 @@ export default function LionHero() {
         }
       })
 
-      // Rotating dashes on inner ring
       for (let i = 0; i < 24; i++) {
         const angle = (i / 24) * Math.PI * 2 + t * 0.004
         const x1 = cx + 110 * Math.cos(angle)
@@ -95,7 +120,8 @@ export default function LionHero() {
         const x2 = cx + 120 * Math.cos(angle)
         const y2 = cy + 120 * Math.sin(angle)
         ctx.beginPath()
-        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y2)
         ctx.strokeStyle = i % 3 === 0 ? 'rgba(245,166,35,0.6)' : 'rgba(20,184,166,0.25)'
         ctx.lineWidth = i % 3 === 0 ? 2 : 1
         ctx.stroke()
@@ -103,9 +129,16 @@ export default function LionHero() {
 
       animId = requestAnimationFrame(draw)
     }
+
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
     draw()
-    return () => cancelAnimationFrame(animId)
-  }, [])
+
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', resizeCanvas)
+    }
+  }, [isMobile, isPageVisible, isHeroInViewport])
 
   // Entrance sequence
   useEffect(() => {
@@ -139,7 +172,7 @@ export default function LionHero() {
   }
 
   return (
-    <div className="relative hidden md:flex items-center justify-center" style={{ height: 440, width: '100%' }}>
+    <div ref={sectionRef} className="relative hidden md:flex items-center justify-center" style={{ height: 440, width: '100%' }}>
 
       {/* Matrix rain background */}
       <canvas ref={matrixRef} className="absolute inset-0 w-full h-full opacity-25 pointer-events-none"/>

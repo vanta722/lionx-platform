@@ -1,6 +1,7 @@
 import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { useInViewport, usePageVisible } from '../hooks/animationVisibility'
 import Navbar from '../components/Navbar'
 import LionHero from '../components/LionHero'
 
@@ -12,17 +13,30 @@ const PHRASES = [
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const heroSectionRef = useRef<HTMLElement>(null)
+  const isPageVisible = usePageVisible()
+  const isHeroInViewport = useInViewport(heroSectionRef, { threshold: 0.15 })
   const [typeText, setTypeText]     = useState('')
   const [countdown, setCountdown]   = useState('30d 00h 00m 00s')
   const [totalBurned, setTotalBurned]   = useState(1_050_000) // confirmed black hole balance
   const [displayBurned, setDisplayBurned] = useState(1_050_000)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    const syncIsDesktop = () => setIsDesktop(window.innerWidth >= 768)
+    syncIsDesktop()
+    window.addEventListener('resize', syncIsDesktop)
+    return () => window.removeEventListener('resize', syncIsDesktop)
+  }, [])
 
   // Particle canvas
   useEffect(() => {
+    if (!isDesktop || !isPageVisible || !isHeroInViewport) return
+
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    let animId: number
+    let animId = 0
 
     const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
     resize()
@@ -59,7 +73,7 @@ export default function Home() {
     }
     draw()
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
-  }, [])
+  }, [isDesktop, isPageVisible, isHeroInViewport])
 
   // Typewriter
   useEffect(() => {
@@ -172,10 +186,10 @@ export default function Home() {
       <Navbar/>
 
       {/* CURSOR TRAIL — desktop only, causes repaints on mobile */}
-      <div className="hidden md:block"><CursorTrail/></div>
+      <div className="hidden md:block"><CursorTrail active={isDesktop && isPageVisible && isHeroInViewport}/></div>
 
       {/* HERO */}
-      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
+      <section ref={heroSectionRef} className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
         <div className="absolute inset-0 pointer-events-none" style={{
           background: 'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(20,184,166,0.09) 0%,transparent 60%)'
         }}/>
@@ -323,20 +337,26 @@ export default function Home() {
   )
 }
 
-function CursorTrail() {
+function CursorTrail({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
   useEffect(() => {
+    if (!active) return
+
     const canvas = canvasRef.current
     if (!canvas || typeof window === 'undefined') return
     const ctx = canvas.getContext('2d')!
-    canvas.width  = window.innerWidth
-    canvas.height = window.innerHeight
-    window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight })
+    let animId = 0
+
+    const onResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+    onResize()
+    window.addEventListener('resize', onResize)
 
     const trail: {x:number,y:number,alpha:number,r:number,c:string}[] = []
     let mx = 0, my = 0
 
-    window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY })
+    const onMouseMove = (e: MouseEvent) => { mx = e.clientX; my = e.clientY }
+    window.addEventListener('mousemove', onMouseMove)
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -353,9 +373,15 @@ function CursorTrail() {
         ctx.fill()
       })
       ctx.globalAlpha = 1
-      requestAnimationFrame(draw)
+      animId = requestAnimationFrame(draw)
     }
     draw()
-  }, [])
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('mousemove', onMouseMove)
+    }
+  }, [active])
+
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 999 }}/>
 }
