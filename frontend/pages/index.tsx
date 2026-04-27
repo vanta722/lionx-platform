@@ -2,6 +2,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useInViewport, usePageVisible } from '../hooks/animationVisibility'
+import useReducedMotion from '../lib/useReducedMotion'
 import Navbar from '../components/Navbar'
 import LionHero from '../components/LionHero'
 
@@ -16,6 +17,7 @@ export default function Home() {
   const heroSectionRef = useRef<HTMLElement>(null)
   const isPageVisible = usePageVisible()
   const isHeroInViewport = useInViewport(heroSectionRef, { threshold: 0.15 })
+  const reducedMotion = useReducedMotion()
   const [typeText, setTypeText]     = useState('')
   const [countdown, setCountdown]   = useState('30d 00h 00m 00s')
   const [totalBurned, setTotalBurned]   = useState(1_050_000) // confirmed black hole balance
@@ -31,7 +33,7 @@ export default function Home() {
 
   // Particle canvas
   useEffect(() => {
-    if (!isDesktop || !isPageVisible || !isHeroInViewport) return
+    if (!isDesktop || reducedMotion || !isPageVisible || !isHeroInViewport) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -73,10 +75,14 @@ export default function Home() {
     }
     draw()
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
-  }, [isDesktop, isPageVisible, isHeroInViewport])
+  }, [isDesktop, reducedMotion, isPageVisible, isHeroInViewport])
 
   // Typewriter
   useEffect(() => {
+    if (reducedMotion) {
+      setTypeText(PHRASES[0])
+      return
+    }
     let pi = 0, ci = 0, deleting = false
     const tick = () => {
       const phrase = PHRASES[pi]
@@ -90,7 +96,7 @@ export default function Home() {
       setTimeout(tick, deleting ? 40 : 65)
     }
     tick()
-  }, [])
+  }, [reducedMotion])
 
   // Countdown
   useEffect(() => {
@@ -144,6 +150,10 @@ export default function Home() {
 
   // Animate burn counter
   useEffect(() => {
+    if (reducedMotion) {
+      setDisplayBurned(Math.floor(totalBurned))
+      return
+    }
     if (totalBurned === 0) return
     const end = totalBurned
     const duration = 1500
@@ -155,7 +165,7 @@ export default function Home() {
       if (progress < 1) requestAnimationFrame(step)
     }
     requestAnimationFrame(step)
-  }, [totalBurned])
+  }, [reducedMotion, totalBurned])
 
   const stats = [
     { val: '20,207,717',                                               label: 'LDA Total Supply'  },
@@ -178,7 +188,7 @@ export default function Home() {
       </Head>
 
       {/* Background particles — desktop only */}
-      <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none opacity-40 hidden md:block"/>
+      {!reducedMotion && <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none opacity-40 hidden md:block"/>}
       <div className="fixed inset-0 z-0 pointer-events-none" style={{
         backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px)'
       }}/>
@@ -186,7 +196,7 @@ export default function Home() {
       <Navbar/>
 
       {/* CURSOR TRAIL — desktop only, causes repaints on mobile */}
-      <div className="hidden md:block"><CursorTrail active={isDesktop && isPageVisible && isHeroInViewport}/></div>
+      <div className="hidden md:block"><CursorTrail active={!reducedMotion && isDesktop && isPageVisible && isHeroInViewport}/></div>
 
       {/* HERO */}
       <section ref={heroSectionRef} className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16">
@@ -223,7 +233,7 @@ export default function Home() {
               color: '#14b8a6',
               fontWeight: 500,
               fontSize: 15,
-              borderRight: '2px solid #14b8a6',
+              borderRight: reducedMotion ? 'none' : '2px solid #14b8a6',
               paddingRight: 4,
             }}>{typeText}</span>
           </div>
@@ -246,7 +256,7 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="mt-16 flex flex-col items-center gap-2" style={{ color: '#4a5a6a', animation: 'float 3s ease-in-out infinite' }}>
+          <div className="mt-16 flex flex-col items-center gap-2" style={{ color: '#4a5a6a', animation: reducedMotion ? 'none' : 'float 3s ease-in-out infinite' }}>
             <div style={{ width: 1, height: 40, background: 'linear-gradient(180deg,#14b8a6,transparent)' }}/>
             <span className="text-xs">scroll</span>
           </div>

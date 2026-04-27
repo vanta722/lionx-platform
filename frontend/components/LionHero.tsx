@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInViewport, usePageVisible } from '../hooks/animationVisibility'
+import useReducedMotion from '../lib/useReducedMotion'
 
 export default function LionHero() {
   const canvasRef   = useRef<HTMLCanvasElement>(null)
@@ -11,6 +12,7 @@ export default function LionHero() {
   const sectionRef = useRef<HTMLDivElement>(null)
   const isPageVisible = usePageVisible()
   const isHeroInViewport = useInViewport(sectionRef, { threshold: 0.2 })
+  const reducedMotion = useReducedMotion()
 
   // Detect mobile after mount to avoid SSR/hydration mismatch
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function LionHero() {
 
   // Matrix rain
   useEffect(() => {
-    if (isMobile || !isPageVisible || !isHeroInViewport) return
+    if (isMobile || reducedMotion || !isPageVisible || !isHeroInViewport) return
 
     const canvas = matrixRef.current
     if (!canvas) return
@@ -59,11 +61,11 @@ export default function LionHero() {
       clearInterval(id)
       window.removeEventListener('resize', resizeCanvas)
     }
-  }, [isMobile, isPageVisible, isHeroInViewport])
+  }, [isMobile, reducedMotion, isPageVisible, isHeroInViewport])
 
   // Orbit particles canvas
   useEffect(() => {
-    if (isMobile || !isPageVisible || !isHeroInViewport) return
+    if (isMobile || reducedMotion || !isPageVisible || !isHeroInViewport) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -138,24 +140,31 @@ export default function LionHero() {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', resizeCanvas)
     }
-  }, [isMobile, isPageVisible, isHeroInViewport])
+  }, [isMobile, reducedMotion, isPageVisible, isHeroInViewport])
 
   // Entrance sequence
   useEffect(() => {
+    if (reducedMotion) {
+      setLoaded(true)
+      setScanning(false)
+      setGlitching(false)
+      return
+    }
     const t1 = setTimeout(() => setLoaded(true),   400)
     const t2 = setTimeout(() => setScanning(true), 800)
     const t3 = setTimeout(() => setGlitching(true), 1500)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
-  }, [])
+  }, [reducedMotion])
 
   // Periodic glitch
   useEffect(() => {
+    if (reducedMotion) return
     const t = setInterval(() => {
       setGlitching(true)
       setTimeout(() => setGlitching(false), 300)
     }, 5000)
     return () => clearInterval(t)
-  }, [])
+  }, [reducedMotion])
 
   // ── Mobile: static lightweight version (no canvas) ────────
   if (isMobile) {
@@ -175,7 +184,17 @@ export default function LionHero() {
     <div ref={sectionRef} className="relative hidden md:flex items-center justify-center" style={{ height: 440, width: '100%' }}>
 
       {/* Matrix rain background */}
-      <canvas ref={matrixRef} className="absolute inset-0 w-full h-full opacity-25 pointer-events-none"/>
+      {reducedMotion ? (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            opacity: 0.25,
+            backgroundImage: 'linear-gradient(180deg, rgba(20,184,166,0.06), transparent 60%), repeating-linear-gradient(90deg, rgba(20,184,166,0.08), rgba(20,184,166,0.08) 1px, transparent 1px, transparent 18px)',
+          }}
+        />
+      ) : (
+        <canvas ref={matrixRef} className="absolute inset-0 w-full h-full opacity-25 pointer-events-none"/>
+      )}
 
       {/* HUD corner brackets */}
       {[['top-4 left-4', 'border-t-2 border-l-2 rounded-tl-sm'],
@@ -200,19 +219,36 @@ export default function LionHero() {
       </div>
 
       {/* Orbit canvas */}
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none"/>
+      {reducedMotion ? (
+        <div className="absolute inset-0 w-full h-full pointer-events-none flex items-center justify-center">
+          {[130, 165, 200].map((radius, i) => (
+            <div
+              key={radius}
+              className="absolute rounded-full"
+              style={{
+                width: radius * 2,
+                height: radius * 2,
+                border: `1px solid ${i % 2 === 0 ? 'rgba(245,166,35,0.12)' : 'rgba(20,184,166,0.12)'}`,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none"/>
+      )}
 
       {/* Holographic expanding rings */}
       {loaded && [0, 800, 1600].map(delay => (
         <div key={delay} className="absolute rounded-full pointer-events-none" style={{
           width: 220, height: 220,
           border: '1px solid rgba(20,184,166,0.5)',
-          animation: `expand-ring 3s ease-out ${delay}ms infinite`,
+          animation: reducedMotion ? 'none' : `expand-ring 3s ease-out ${delay}ms infinite`,
+          opacity: reducedMotion ? 0.25 : 1,
         }}/>
       ))}
 
       {/* Scan line */}
-      {scanning && (
+      {scanning && !reducedMotion && (
         <div className="absolute pointer-events-none" style={{
           left: '50%', transform: 'translateX(-50%)',
           width: 220, height: 2,
@@ -234,17 +270,17 @@ export default function LionHero() {
         <div className="absolute rounded-full" style={{
           width: 200, height: 200,
           background: 'radial-gradient(circle,rgba(245,166,35,0.15) 0%,rgba(20,184,166,0.05) 50%,transparent 70%)',
-          animation: 'breathe 3s ease-in-out infinite',
+          animation: reducedMotion ? 'none' : 'breathe 3s ease-in-out infinite',
         }}/>
 
         {/* Hexagon frame */}
         <div className="relative flex items-center justify-center" style={{ width: 160, height: 160 }}>
-          <svg width="160" height="160" className="absolute" style={{ animation: 'spin-slow 20s linear infinite' }}>
+          <svg width="160" height="160" className="absolute" style={{ animation: reducedMotion ? 'none' : 'spin-slow 20s linear infinite' }}>
             <polygon points="80,4 148,42 148,118 80,156 12,118 12,42"
               fill="none" stroke="rgba(245,166,35,0.3)" strokeWidth="1.5"
               strokeDasharray="8 4"/>
           </svg>
-          <svg width="140" height="140" className="absolute" style={{ animation: 'spin-slow 15s linear infinite reverse' }}>
+          <svg width="140" height="140" className="absolute" style={{ animation: reducedMotion ? 'none' : 'spin-slow 15s linear infinite reverse' }}>
             <polygon points="70,6 128,38 128,102 70,134 12,102 12,38"
               fill="none" stroke="rgba(20,184,166,0.25)" strokeWidth="1"
               strokeDasharray="4 6"/>
@@ -255,7 +291,7 @@ export default function LionHero() {
             style={{
               fontSize: 88,
               filter: `drop-shadow(0 0 20px rgba(245,166,35,0.7)) drop-shadow(0 0 40px rgba(245,166,35,0.4)) drop-shadow(0 0 60px rgba(20,184,166,0.3))`,
-              animation: 'lion-pulse 4s ease-in-out infinite',
+              animation: reducedMotion ? 'none' : 'lion-pulse 4s ease-in-out infinite',
               ...(glitching ? { filter: 'drop-shadow(0 0 20px rgba(20,184,166,0.9)) hue-rotate(90deg) brightness(1.5)', transform: 'translate(-2px, 1px) skewX(-3deg)' } : {}),
               transition: glitching ? 'none' : 'filter 0.3s ease, transform 0.3s ease',
             }}>
