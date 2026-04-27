@@ -276,10 +276,10 @@ export default function Home() {
 
         <div className="grid md:grid-cols-3 gap-5">
           {tools.map((t, i) => (
-            <div key={i} className="relative rounded-2xl p-8 text-left group transition-all duration-300 hover:-translate-y-1"
-              style={{ background: '#0a0a16', border: '1px solid rgba(20,184,166,0.16)' }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = '#14b8a6')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(20,184,166,0.16)')}>
+            <div
+              key={i}
+              className="relative rounded-2xl p-8 text-left group border border-[rgba(20,184,166,0.16)] transition-colors transition-transform duration-300 hover:-translate-y-1 hover:border-[#14b8a6]"
+              style={{ background: '#0a0a16' }}>
               <div className="absolute top-0 left-0 right-0 h-px rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity shimmer-border"/>
               <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-4"
                 style={{ background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.2)' }}>{t.icon}</div>
@@ -326,9 +326,14 @@ export default function Home() {
         <span className="font-extrabold text-base" style={{ color: '#14b8a6' }}>🦁 LION X</span>
         <div className="flex gap-6">
           {[['Website','https://lionxeco.net'],['Twitter','https://x.com/lionxeco'],['Telegram','https://t.me/Lionxone'],['Tronscan','https://tronscan.org/#/token20/TNP1D18nJCqQHhv4i38qiNtUUuL5VyNoC1']].map(([l,h]) => (
-            <a key={l} href={h} target="_blank" rel="noreferrer" className="text-xs no-underline transition-colors" style={{ color: '#4a5a6a' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#14b8a6')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#4a5a6a')}>{l}</a>
+            <a
+              key={l}
+              href={h}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs no-underline text-[#4a5a6a] transition-colors duration-200 hover:text-[#14b8a6]">
+              {l}
+            </a>
           ))}
         </div>
         <span className="text-xs" style={{ color: '#4a5a6a' }}>© 2026 Lion X Ecosystem · Built on Tron</span>
